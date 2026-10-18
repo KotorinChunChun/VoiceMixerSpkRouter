@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>VoiceMixer キャプチャ</title>
+    <link rel="stylesheet" href="./capture-panel.css">
+  </head>
+  <body>
+    <h1>キャプチャ対象のタブ</h1>
+    <p class="hint">新しいタブを開始するには、そのタブを前面にして拡張ボタンを押してください。</p>
+
+    <div id="capture-target" hidden>
+      <span>開始対象: </span>
+      <strong data-target-title></strong>
+      <button id="start" type="button">キャプチャ開始</button>
+    </div>
+
+    <output aria-live="polite"></output>
+
+    <h2>タブ別設定</h2>
+    <p id="empty">キャプチャ対象のタブはありません</p>
+    <div id="tab-cards"></div>
+
+    <p class="hint">対象タブを前面にしてVoiceMixerアイコンを押すと、このパネルが開きます。port・認証tokenなど共通接続設定はオプション画面で設定してください。</p>
+    <button id="open-options" type="button">設定を開く</button>
+    <script type="module" src="./sidepanel.ts"></script>
+  </body>
+</html>

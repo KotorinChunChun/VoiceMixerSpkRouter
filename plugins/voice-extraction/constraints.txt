@@ -1,0 +1,36 @@
+# 2026-09-07 Windows x64 / Python 3.11 CPU検証時の推移依存。
+# torch/torchaudioのCPU/CUDAビルドはsetup-runtime.ps1で選択する。
+antlr4-python3-runtime==4.9.3
+appdirs==1.4.4
+certifi==2026.7.22
+cffi==2.1.1
+charset-normalizer==3.5.1
+cloudpickle==3.1.2
+colorama==0.4.6
+deepfilterlib==0.5.6
+dora-search==0.1.12
+einops==0.8.2
+filelock==3.32.3
+fsspec==2026.7.0
+idna==3.19
+jinja2==3.1.6
+julius==0.2.8
+lameenc==1.8.4
+loguru==0.7.3
+markupsafe==3.0.3
+mpmath==1.3.0
+networkx==3.6.1
+omegaconf==2.3.1
+openunmix==1.3.0
+packaging==23.2
+pycparser==3.0
+pyyaml==6.0.3
+requests==2.34.2
+retrying==1.4.2
+submitit==1.5.4
+sympy==1.13.1
+tqdm==4.70.0
+treetable==0.2.6
+typing-extensions==4.16.0
+urllib3==2.7.0
+win32-setctime==1.2.0

@@ -1,0 +1,16 @@
+{
+  "name": "voicemixer-edge-extension",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && node --test tests/*.test.mjs"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.279",
+    "@types/node": "^22.10.0",
+    "typescript": "^5.8.0",
+    "vite": "^7.1.5"
+  }
+}

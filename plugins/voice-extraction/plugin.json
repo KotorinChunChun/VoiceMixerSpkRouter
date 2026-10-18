@@ -1,0 +1,19 @@
+{
+  "plugin_id": "voicemixer.voice-extraction",
+  "name": "人声抽出（DeepFilterNet / Demucs）",
+  "version": "0.1.0",
+  "api_version": 1,
+  "category": "noise_reduction",
+  "execution_mode": "process",
+  "input_ports": [{"id":"audio_in","name":"音声入力","direction":"input","required":true,"max_connections":1}],
+  "output_ports": [{"id":"audio_out","name":"抽出した声","direction":"output","required":true,"max_connections":null}],
+  "parameters": [
+    {"id":"method","label":"抽出方式","kind":"enum","default":"deepfilternet3","options":["deepfilternet3","htdemucs","htdemucs_ft"],"description":"DeepFilterNet3: 会話の環境雑音低減。htdemucs: 楽曲からのボーカル分離（単体）。htdemucs_ft: 微調整済み4モデル、推論負荷は約4倍。歌声が残る場合があり、完全抽出は保証しません。","restart_required":true},
+    {"id":"device","label":"推論デバイス","kind":"enum","default":"cpu","options":["cpu","cuda"],"description":"CUDAは対応GPU・ドライバー・CUDA版PyTorchの明示導入が必要です。自動切替はしません。","restart_required":true},
+    {"id":"chunk_seconds","label":"処理チャンク","kind":"number","default":1.0,"min":0.25,"max":7.0,"step":0.25,"unit":"秒","description":"大きいほど文脈を保てますが待ち時間が増えます。Demucsは追加前後余白0.25秒、DeepFilterNetは0.05秒。実際の推論時間は別途加算されます。","restart_required":true},
+    {"id":"model_root","label":"モデル保存フォルダー","kind":"string","default":"","description":"空欄はユーザーデータ領域。model_manager.pyで明示導入したモデルだけをロードします。","restart_required":true}
+  ],
+  "audio": {"preferred_sample_rate":48000,"preferred_channels":2,"preferred_block_frames":480,"minimum_block_frames":64,"maximum_block_frames":4096},
+  "default_enabled": false,
+  "process": {"executable":".venv/Scripts/python.exe","arguments":["voice_extraction.py"],"start_timeout_ms":120000}
+}

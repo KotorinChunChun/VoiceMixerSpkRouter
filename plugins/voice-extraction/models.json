@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "verified_date": "2026-09-07",
+  "runtime": {"python":"3.9–3.11 x64","windows_x64":true,"windows_arm64":false,"download_bytes":null,"installed_bytes":null,"note":"実行環境容量とRAM/VRAMは方式・CPU/CUDAで変わるため未測定。導入時のpip reportとruntime-install.jsonに実量を記録します。"},
+  "models": [
+    {"id":"deepfilternet3","name":"DeepFilterNet3","purpose":"会話の環境雑音低減。楽曲の歌声分離用ではありません。","license":"MIT OR Apache-2.0","source":"https://github.com/Rikorose/DeepFilterNet","license_url":"https://github.com/Rikorose/DeepFilterNet/blob/main/LICENSE","download_bytes":7986207,"extracted_model_bytes":8716140,"model_entry":"DeepFilterNet3","files":[{"name":"DeepFilterNet3.zip","url":"https://raw.githubusercontent.com/Rikorose/DeepFilterNet/82b0c7ad33fc756284104053817d1e855d8d8386/models/DeepFilterNet3.zip","bytes":7986207,"sha256":"49c52edc8947ae1f9bf50d81530beaf3a2c3245aeaf34b6f31ff535cd22284d2","archive":true}]},
+    {"id":"htdemucs","name":"Demucs 単体","purpose":"楽曲からボーカルを分離。BGMの歌声も残ることがあります。","license":"MIT","source":"https://github.com/facebookresearch/demucs","license_url":"https://github.com/facebookresearch/demucs/blob/main/LICENSE","download_bytes":84141911,"extracted_model_bytes":84141911,"model_entry":"955717e8","files":[{"name":"955717e8-8726e21a.th","url":"https://dl.fbaipublicfiles.com/demucs/hybrid_transformer/955717e8-8726e21a.th","bytes":84141911,"sha256_prefix":"8726e21a"}]},
+    {"id":"htdemucs_ft","name":"Demucs 高品質（4モデル）","purpose":"微調整済み4モデルによるボーカル分離。単体より約4倍の推論負荷。必ず改善するとは限りません。","license":"MIT","source":"https://github.com/facebookresearch/demucs","license_url":"https://github.com/facebookresearch/demucs/blob/main/LICENSE","download_bytes":336565084,"extracted_model_bytes":336565084,"model_entry":"htdemucs_ft","files":[
+      {"name":"f7e0c4bc-ba3fe64a.th","url":"https://dl.fbaipublicfiles.com/demucs/hybrid_transformer/f7e0c4bc-ba3fe64a.th","bytes":84141271,"sha256_prefix":"ba3fe64a"},
+      {"name":"d12395a8-e57c48e6.th","url":"https://dl.fbaipublicfiles.com/demucs/hybrid_transformer/d12395a8-e57c48e6.th","bytes":84141271,"sha256_prefix":"e57c48e6"},
+      {"name":"92cfc3b6-ef3bcb9c.th","url":"https://dl.fbaipublicfiles.com/demucs/hybrid_transformer/92cfc3b6-ef3bcb9c.th","bytes":84141271,"sha256_prefix":"ef3bcb9c"},
+      {"name":"04573f0d-f3cf25b2.th","url":"https://dl.fbaipublicfiles.com/demucs/hybrid_transformer/04573f0d-f3cf25b2.th","bytes":84141271,"sha256_prefix":"f3cf25b2"}
+    ]}
+  ]
+}

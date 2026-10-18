@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ja">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ブラウザ音声キャプチャの案内</title>
+<style>
+body{font:18px/1.8 system-ui,sans-serif;max-width:850px;margin:40px auto;padding:0 24px;color:#292524;background:#fffaf5}
+h1,h2{line-height:1.4}h2{border-left:5px solid #c05a00;padding-left:14px;scroll-margin-top:24px}a{color:#a84600}code{background:#f4e9de;padding:2px 5px;overflow-wrap:anywhere}li{margin:10px 0}nav{display:flex;gap:24px}section{margin:44px 0}table{border-collapse:collapse;width:100%}th,td{padding:10px;border:1px solid #d9cabe;text-align:left}
+</style>
+<h1>ブラウザ音声キャプチャの案内</h1>
+<nav><a href="#install">インストール案内</a><a href="#setup">設定案内</a></nav>
+<section id="install">
+<h2>インストール</h2>
+<ol>
+<li>SpkRouterと同じフォルダーの <code>browser-extension</code> を使います。中に <code>manifest.json</code> があることを確認します。開発環境では <code>C:\develop\VoiceMixerSpkRouter\browser-extension\dist</code> も使用できます。</li>
+<li>Chromeではアドレス欄に <code>chrome://extensions</code>、Edgeでは <code>edge://extensions</code> を入力します。</li>
+<li>「デベロッパー モード」（Edgeは「開発者モード」）をONにし、「パッケージ化されていない拡張機能を読み込む」（Edgeは「展開して読み込み」）から、そのフォルダーを選びます。</li>
+<li>「VoiceMixer Edge PCM」をツールバーに固定します。Chromeでも同じ拡張を使用します。</li>
+</ol>
+<p>更新時は拡張の管理画面で再読み込みします。実行中の全タブのキャプチャが終了するため、送信を停止してから更新してください。</p>
+</section>
+<section id="setup">
+<h2>接続と設定</h2>
+<ol>
+<li>SpkRouterの基本設定で「入力ブラウザを使用する」をONにします。</li>
+<li>音声を再生するタブを前面にし、拡張アイコンを押します。「共通接続設定を開く」で、SpkRouterのポートと認証トークンを設定し、保存します。</li>
+</ol>
+<table><tr><th>拡張の項目</th><th>合わせる設定</th></tr>
+<tr><td>Backendポート</td><td>SpkRouterの「ポート」。初期値は <code>18766</code></td></tr>
+<tr><td>認証トークン</td><td>SpkRouterの「認証トークン」と同じ値</td></tr>
+<tr><td>対象タブのストリームキー</td><td>SpkRouterの「ストリームキー」と同じ値。初期値は <code>spk-router</code></td></tr></table>
+<ol start="3">
+<li>対象タブのキーはPCM送信を停止した状態で編集・保存します。「キャプチャ開始」または対象タブの「PCM送信を再開」を押し、ブラウザのキャプチャ許可を操作します。</li>
+<li>SpkRouterで出力1・2のデバイスと有効状態を設定して「適用」を押し、入力を「ブラウザ」へ切り替えます。</li>
+</ol>
+<p>同じブラウザのポートとトークンは全タブで共通です。VoiceMixer本体・Runnerと併用するときは待受ポートを分けます。SpkRouterが取り込むのは一致する1つのストリームです。</p>
+<p>ブラウザ内でも音を鳴らす場合は、対象タブの「同時再生」をONにします。二重再生になる場合はOFFにします。</p>
+<p>SpkRouterの「停止」は取得と転送を止めます。ブラウザを使用ONにしている間は接続待受を維持します。ブラウザ側のキャプチャも解放する場合は、拡張の「PCM送信を停止」を押します。「ブラウザ」への切替だけではブラウザの許可操作を代行しません。</p>
+<h2>音が届かないとき</h2>
+<ul><li>ポート・認証トークン・対象タブのキーが一致しているか確認します。</li><li>タブで音声を再生し、PCM送信を開始したことを確認します。</li><li>SpkRouterの入力がブラウザになっていること、出力先と有効状態を確認します。</li><li>同じキーを他のタブで送信していないか、他のアプリが同じポートを使用していないか確認します。</li></ul>
+</section>
+</html>

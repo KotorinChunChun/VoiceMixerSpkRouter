@@ -1,0 +1,17 @@
+name: Windows
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: browser-extension/package-lock.json
+      - run: cargo test --locked --bin voicemixer-spk -- --test-threads=1
+      - run: cargo build --locked --release --bin voicemixer-spk
+      - run: npm --prefix browser-extension ci
+      - run: npm --prefix browser-extension run build
