@@ -1,6 +1,6 @@
 # VoiceMixerSpkRouterの構造
 
-現在版はv1.0.8。動作の正本は[仕様と利用方法](../spk-router.md)。エントリーポイントは `src/main.rs`、専用実装は同じ場所の `spk_router/` に置く。
+現在版はv1.0.9。動作の正本は[仕様と利用方法](../spk-router.md)。エントリーポイントは `src/main.rs`、専用実装は同じ場所の `spk_router/` に置く。
 
 ## ファイルと責務
 

@@ -34,7 +34,7 @@ public static class SpkUiTest {
 }
 '@
 $project = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))
-$run = Join-Path $project ('tmp/spk-router-v108/run-' + [guid]::NewGuid().ToString('N'))
+$run = Join-Path $project ('tmp/spk-router-v109/run-' + [guid]::NewGuid().ToString('N'))
 [void][IO.Directory]::CreateDirectory($run)
 $config = Join-Path $run 'spk-settings.json'
 $status = Join-Path $run 'spk-status.json'
@@ -112,8 +112,8 @@ try {
     Assert-Case (@($settings.hotkeys[0..3] | Where-Object { -not $_.shift -or $_.alt -or $_.mode -ne 'coexist' }).Count -eq 0) '新規設定がShift・共存ではありません。'
     $port = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback,0)
     try { $port.Start(); $settings.browser_port = $port.LocalEndpoint.Port } finally { $port.Stop() }
-    $settings.browser_token = 'spk-router-v108-validation-only'
-    $settings.browser_stream_key = 'spk-router-v108-validation'
+    $settings.browser_token = 'spk-router-v109-validation-only'
+    $settings.browser_stream_key = 'spk-router-v109-validation'
     [IO.File]::WriteAllText($config,($settings | ConvertTo-Json -Depth 10),[Text.UTF8Encoding]::new($false))
     Start-Resident @('--mode','browser')
     Wait-Test { State 'browser' } 'ブラウザ待機に移りません。'
@@ -124,6 +124,7 @@ try {
     Wait-Test { [SpkUiTest]::IsWindowVisible($editor) -and [SpkUiTest]::GetDlgItem($editor,502) -ne [IntPtr]::Zero } '明示した設定画面が表示されません。'
     Assert-Case ([SpkUiTest]::Read((Control $editor 501)) -eq '適用' -and [SpkUiTest]::Read((Control $editor 502)) -eq '閉じる') '下部ボタンの表記が異なります。'
     Assert-Case ([SpkUiTest]::Read((Control $editor 350)) -eq 'インストール案内' -and [SpkUiTest]::Read((Control $editor 352)) -eq '設定案内') 'ブラウザの案内リンクがありません。'
+    Assert-Case ([SpkUiTest]::IsWindowVisible((Control $editor 353)) -and [SpkUiTest]::Read((Control $editor 353)).Contains('GitHub')) '公開GitHubリンクがありません。'
     $hostWindow = Window 'VoiceMixerSpkRouterV1'
     $hash = (Get-FileHash -LiteralPath $config).Hash
     foreach ($operation in @(1,2,4,5,6,104,205)) { Command $hostWindow $operation }
@@ -166,6 +167,8 @@ try {
     Photo $editor 'basic.png'
     Select-Page $editor 1
     Wait-Test { [SpkUiTest]::IsWindowVisible((Control $editor 1055)) -and -not [SpkUiTest]::IsWindowVisible((Control $editor 330)) } 'キー設定ページへ切り替わりません。'
+    Assert-Case (-not [SpkUiTest]::IsWindowVisible((Control $editor 353))) 'GitHubリンクがキー設定にも残っています。'
+    Assert-Case ([SpkUiTest]::Read((Control $editor 354)).StartsWith('共存：') -and [SpkUiTest]::Read((Control $editor 355)).StartsWith('上書き：')) 'キー設定の説明ラベルがありません。'
     $previous = $null
     foreach ($row in @(5,4,0,1,2,3)) {
         $bounds = [SpkUiTest+Rect]::new()

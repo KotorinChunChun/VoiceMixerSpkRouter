@@ -220,6 +220,16 @@ impl Ui {
                         editor.input_selection_changed();
                     }
                 }
+                Command::OpenRepository => {
+                    let owner = self.editor.as_ref().map(|editor| editor.hwnd());
+                    if let Err(message) =
+                        browser_help::open_url(owner, browser_help::REPOSITORY_URL)
+                    {
+                        if let Some(editor) = &self.editor {
+                            editor.message(&message);
+                        }
+                    }
+                }
                 Command::BrowserInstallHelp | Command::BrowserSetupHelp => {
                     let owner = self.editor.as_ref().map(|editor| editor.hwnd());
                     if let Err(message) =

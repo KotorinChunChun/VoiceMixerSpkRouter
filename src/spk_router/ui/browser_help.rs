@@ -9,6 +9,8 @@ use windows::{
     },
 };
 
+pub(super) const REPOSITORY_URL: &str = "https://github.com/KotorinChunChun/VoiceMixerSpkRouter";
+
 fn guide_path() -> Result<PathBuf, String> {
     let deployed = std::env::current_exe()
         .ok()
@@ -38,7 +40,11 @@ pub(super) fn open(owner: Option<HWND>, setup: bool) -> Result<(), String> {
     let path = guide_path()?.canonicalize().map_err(|e| e.to_string())?;
     let path = path.to_string_lossy();
     let path = Path::new(path.strip_prefix("\\\\?\\").unwrap_or(&path));
-    let url = wide(&guide_url(path, setup));
+    open_url(owner, &guide_url(path, setup))
+}
+
+pub(super) fn open_url(owner: Option<HWND>, url: &str) -> Result<(), String> {
+    let url = wide(url);
     let result = unsafe {
         ShellExecuteW(
             owner,
@@ -52,7 +58,7 @@ pub(super) fn open(owner: Option<HWND>, setup: bool) -> Result<(), String> {
     if result.0 as isize > 32 {
         Ok(())
     } else {
-        Err("ブラウザ音声キャプチャの案内を開けませんでした。".into())
+        Err("リンクを開けませんでした。".into())
     }
 }
 

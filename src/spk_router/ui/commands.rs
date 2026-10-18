@@ -52,6 +52,7 @@ pub(super) enum Command {
     InputChanged = 508,
     BrowserInstallHelp = 509,
     BrowserSetupHelp = 510,
+    OpenRepository = 511,
 }
 impl Command {
     pub(super) fn is_shortcut(self) -> bool {
@@ -93,6 +94,7 @@ impl Command {
             508 => Self::InputChanged,
             509 => Self::BrowserInstallHelp,
             510 => Self::BrowserSetupHelp,
+            511 => Self::OpenRepository,
             _ => return None,
         })
     }

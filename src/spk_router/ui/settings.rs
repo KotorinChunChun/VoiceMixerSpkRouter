@@ -29,12 +29,16 @@ const APPLICATION_CONTROL: usize = 302;
 const TAB: usize = 12;
 const BROWSER_HELP: usize = 350;
 const BROWSER_SETUP_HELP: usize = 352;
+const REPOSITORY_LINK: usize = 353;
 const SEPARATOR_STYLE: u32 = 0x10; // Win32 SS_ETCHEDHORZ
 unsafe extern "system" fn settings_proc(hwnd: HWND, msg: u32, w: WPARAM, l: LPARAM) -> LRESULT {
     match msg {
         WM_DRAWITEM if l.0 != 0 => {
             let item = unsafe { &*(l.0 as *const DRAWITEMSTRUCT) };
-            if matches!(item.CtlID as usize, BROWSER_HELP | BROWSER_SETUP_HELP) {
+            if matches!(
+                item.CtlID as usize,
+                BROWSER_HELP | BROWSER_SETUP_HELP | REPOSITORY_LINK
+            ) {
                 draw_help_link(item);
                 return LRESULT(1);
             }
@@ -42,7 +46,7 @@ unsafe extern "system" fn settings_proc(hwnd: HWND, msg: u32, w: WPARAM, l: LPAR
         WM_SETCURSOR
             if matches!(
                 unsafe { GetDlgCtrlID(HWND(w.0 as *mut _)) } as usize,
-                BROWSER_HELP | BROWSER_SETUP_HELP
+                BROWSER_HELP | BROWSER_SETUP_HELP | REPOSITORY_LINK
             ) =>
         {
             unsafe {
@@ -86,6 +90,7 @@ unsafe extern "system" fn settings_proc(hwnd: HWND, msg: u32, w: WPARAM, l: LPAR
                     2 => Some(Command::Cancel),
                     BROWSER_HELP => Some(Command::BrowserInstallHelp),
                     BROWSER_SETUP_HELP => Some(Command::BrowserSetupHelp),
+                    REPOSITORY_LINK => Some(Command::OpenRepository),
                     _ => Command::from_id(id),
                 };
                 if let Some(command) = command {
@@ -465,6 +470,16 @@ impl SettingsWindow {
                 s.labels[i] = s.edit(&settings.output_labels[i], 340 + i, 80, y, 150)?;
                 s.devices[i + 1] = s.combo(320 + i, 240, y, 492)?;
             }
+            s.control(
+                "BUTTON",
+                "GitHub（公開リポジトリ）",
+                BS_OWNERDRAW as u32,
+                REPOSITORY_LINK,
+                20,
+                536,
+                430,
+                32,
+            )?;
             s.building_page.set(1);
             s.build_hotkeys(settings)?;
             s.building_page.set(2);
@@ -542,6 +557,26 @@ impl SettingsWindow {
             );
             self.keys[index] = row;
         }
+        self.control(
+            "STATIC",
+            "共存：同じキー入力を他のアプリにも渡し、SpkRouterでも操作します。",
+            0,
+            354,
+            20,
+            384,
+            792,
+            24,
+        )?;
+        self.control(
+            "STATIC",
+            "上書き：他のアプリへのキー入力を可能な範囲で抑止し、SpkRouterで操作します。",
+            0,
+            355,
+            20,
+            420,
+            792,
+            24,
+        )?;
         Ok(())
     }
     pub(super) fn key_selection_changed(&self) {
@@ -1072,6 +1107,7 @@ mod tests {
             for (id, expected) in [
                 (super::BROWSER_HELP, Command::BrowserInstallHelp),
                 (super::BROWSER_SETUP_HELP, Command::BrowserSetupHelp),
+                (super::REPOSITORY_LINK, Command::OpenRepository),
             ] {
                 clear();
                 let link = GetDlgItem(Some(window.hwnd), id as i32).unwrap();
