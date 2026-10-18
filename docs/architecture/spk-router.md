@@ -1,6 +1,6 @@
 # VoiceMixerSpkRouterの構造
 
-現在版はv1.0.9。動作の正本は[仕様と利用方法](../spk-router.md)。エントリーポイントは `src/main.rs`、専用実装は同じ場所の `spk_router/` に置く。
+現在版はv1.0.10。動作の正本は[仕様と利用方法](../spk-router.md)。エントリーポイントは `src/main.rs`、専用実装は同じ場所の `spk_router/` に置く。
 
 ## ファイルと責務
 
@@ -58,3 +58,9 @@ pwsh -NoProfile -File .\dev\scripts\tests\Test-SpkRouterUi.ps1 -Executable .\tar
 低レベルフックの抑止とタイムアウトの制約は[Microsoftの仕様](https://learn.microsoft.com/en-us/windows/win32/winmsg/lowlevelkeyboardproc)、補助入力の権限境界は[SendInputの仕様](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-sendinput)に従う。保護されたOS操作・先行フック・権限境界までの抑止を保証しない。
 
 配備前に元のEXE・設定と稼働状態を退避し、通常終了を確認してからReleaseビルド・配備する。既存Startupは再登録せず、設定のハッシュと単一プロセス・版・状態を確認し、必要な元の状態へ戻す。資料だけの変更ではアプリの版更新・再配備を行わない。自動試験・測定・ユーザー確認・未測定範囲を[検証記録](../../dev/testing/spk-router-results.md)へ追記する。
+
+## 本体管理とインストーラ
+
+management.rsは管理契約2をUI巡回で処理する。現在ユーザーだけのACL・同じ対話セッション・PID・期限を確認する。停止受理を返してから終了へ進み、設定編集中と適用中は拒否する。次の受付を応答前に用意して即時再接続の競合を防ぐ。
+
+maintenance/は製品の識別と正常停止、所有予約の整理と取消復旧を行う独立した.NET補助。ランタイム同梱で発行する。本体のソースやビルドを参照しない。

@@ -12,9 +12,11 @@ VoiceMixer本体から独立したリポジトリです。単独でビルドで�
 
 ## ダウンロードして使う
 
-[GitHub Releasesの最新版](https://github.com/KotorinChunChun/VoiceMixerSpkRouter/releases/latest)から、Windows x64用ZIPをダウンロードしてください。ZIPをすべて展開し、`voicemixer-spk.exe`をダブルクリックします。Rust・Node.js・PowerShell 7の導入は不要です。Windows 11 x64が対象です。
+[GitHub Releases](https://github.com/KotorinChunChun/VoiceMixerSpkRouter/releases)からWindows x64用のsetup.exeを取得し、実行してください。利用者単位の導入で、Rust・Node.js・.NET・PowerShell 7の追加インストールは不要です。Windows 11 x64が対象です。
 
-初回は設定画面が開き、取得停止・両出力OFFで起動します。同梱の「はじめに.html」に初期設定とブラウザ拡張の導入手順を記載しています。設定は展開先の`spk-settings.json`に新しく生成されます。
+初回は設定画面が開き、取得停止・両出力OFFで起動します。同梱の「はじめに.html」に初期設定とブラウザ拡張の導入手順を記載しています。設定は導入先のspk-settings.jsonへ生成し、更新・削除では保持します。
+
+KotorinToys向けの管理契約と配布台帳を同梱しています。本体側の修正・製品登録は今回の対象外です。[導入・更新・削除と本体連携](docs/kotorintoys-integration.md)に製品IDと配布仕様をまとめています。
 
 ## ビルドと起動
 

@@ -22,3 +22,6 @@ spk-status.json
 spk-router-project.json
 /replay-cache/
 /recordings/
+
+/maintenance/**/bin/
+/maintenance/**/obj/
