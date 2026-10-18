@@ -18,3 +18,5 @@ v1.0.8は通常57件、GUI・監視6件、実EXE UI12ケース、ライフサイ
 - OSが保護するキー・権限境界の制約は従来どおり。実MSTSC接続・物理キー・新しい聴感確認を今回測定済みとは扱わない。
 
 公開確認: 専用リポジトリのvisibility=PUBLIC、認証なしHTTP 200、mainとREADME、ローカルとリモートのSHA一致を確認。GitHub ActionsのWindows検証も開始している。
+
+GitHub Actions Windows検証: [実行39144771665](https://github.com/KotorinChunChun/VoiceMixerSpkRouter/actions/runs/39144771665)がsuccess。公開ソースのクリーンチェックアウトで通常試験、Releaseビルド、npm ci、ブラウザ拡張ビルドが全工程成功した。測定対象は3dbe968（後続は完了資料のみ）。
