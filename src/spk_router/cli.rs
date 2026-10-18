@@ -5,6 +5,7 @@ use std::path::PathBuf;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Launch {
     Restore,
+    Startup,
     Settings,
     Stop,
     Mode(Mode),
@@ -24,6 +25,8 @@ pub enum Operation {
 #[derive(Debug, PartialEq, Eq)]
 pub struct Options {
     pub config_path: PathBuf,
+    pub startup: bool,
+    pub launch_origin: String,
     pub operation: Operation,
 }
 
@@ -34,6 +37,8 @@ impl Options {
     ) -> Result<Self, String> {
         let mut args = args.into_iter();
         let mut path = default_path;
+        let mut startup = false;
+        let mut launch_origin = "standalone".to_owned();
         let mut action = None;
         let mut initial = None;
         let mut init = false;
@@ -41,6 +46,16 @@ impl Options {
         let mut check = None;
         while let Some(arg) = args.next() {
             match arg.as_str() {
+                "--startup" => startup = true,
+                "--launch-origin" => {
+                    launch_origin = args.next().ok_or("--launch-originの値が必要です")?;
+                    if !matches!(
+                        launch_origin.as_str(),
+                        "standalone" | "host_manual" | "direct_task" | "via_kotorintoys"
+                    ) {
+                        return Err("起動経路が不正です".into());
+                    }
+                }
                 "--config" => path = PathBuf::from(args.next().ok_or("--configの値が必要です")?),
                 "--mode" => {
                     initial = Some(Mode::parse(&args.next().ok_or("--modeの値が必要です")?)?)
@@ -56,6 +71,8 @@ impl Options {
                     // 既存CLIと同様に、その時点で情報表示へ切り替える。
                     return Ok(Self {
                         config_path: path,
+                        startup,
+                        launch_origin,
                         operation: match arg.as_str() {
                             "--version" => Operation::Version,
                             "--list" => Operation::List,
@@ -87,21 +104,23 @@ impl Options {
         } else if let Some(mode) = check {
             Operation::Diagnose(mode)
         } else {
-            Operation::Launch(
-                action
-                    .or(initial.map(Launch::Mode))
-                    .unwrap_or(Launch::Restore),
-            )
+            Operation::Launch(action.or(initial.map(Launch::Mode)).unwrap_or(if startup {
+                Launch::Startup
+            } else {
+                Launch::Restore
+            }))
         };
         Ok(Self {
             config_path: path,
+            startup,
+            launch_origin,
             operation,
         })
     }
 }
 
 pub fn help() -> String {
-    format!("{APP_NAME} v{APP_VERSION}\n--config FILE\n--init: 初期設定作成\n--mode device|application|browser|stopped: 取得元切替\n--settings: 設定画面\n--stop: 常駐終了\n--status: 状態JSON\n--list: 再生デバイス一覧\n--check device|application|browser|stopped: 保存設定で10秒診断\n既定キー（設定画面で変更可能）\nShift+F1/F2/F3: 取得元切替（再押下で停止）\nShift+F4: 停止")
+    format!("{APP_NAME} v{APP_VERSION}\n--config FILE\n--startup: 設定画面を開かず起動\n--launch-origin standalone|host_manual|direct_task|via_kotorintoys\n--init: 初期設定作成\n--mode device|application|browser|stopped: 取得元切替\n--settings: 設定画面\n--stop: 常駐終了\n--status: 状態JSON\n--list: 再生デバイス一覧\n--check device|application|browser|stopped: 保存設定で10秒診断\n既定キー（設定画面で変更可能）\nShift+F1/F2/F3: 取得元切替（再押下で停止）\nShift+F4: 停止")
 }
 
 #[cfg(test)]
@@ -182,5 +201,22 @@ mod tests {
         let options =
             parse(&["--config", "old.json", "--config", "設定 with spaces.json"]).unwrap();
         assert_eq!(options.config_path, PathBuf::from("設定 with spaces.json"));
+    }
+}
+
+#[cfg(test)]
+mod management_tests {
+    use super::*;
+    #[test]
+    fn host_start_is_silent_and_origin_is_validated() {
+        let parse = |values: &[&str]| {
+            Options::parse(values.iter().map(|s| s.to_string()), "settings.json".into())
+        };
+        let options = parse(&["--startup", "--launch-origin", "via_kotorintoys"]).unwrap();
+        assert!(options.startup);
+        assert_eq!(options.launch_origin, "via_kotorintoys");
+        assert!(parse(&["--launch-origin"]).is_err());
+        assert!(parse(&["--launch-origin", "unknown"]).is_err());
+        assert!(!parse(&[]).unwrap().startup);
     }
 }

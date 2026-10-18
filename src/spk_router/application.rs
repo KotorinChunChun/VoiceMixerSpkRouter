@@ -143,7 +143,8 @@ pub fn run(options: Options) -> Result<(), String> {
         resident(
             settings,
             paths,
-            first || options.operation == Operation::Launch(Launch::Settings),
+            (!options.startup && first) || options.operation == Operation::Launch(Launch::Settings),
+            options.launch_origin,
         )
     }
     #[cfg(not(windows))]
@@ -237,7 +238,12 @@ fn diagnostic_result(latest: Option<Status>) -> Result<(), String> {
 }
 
 #[cfg(windows)]
-fn resident(mut settings: Settings, paths: Paths, open_settings: bool) -> Result<(), String> {
+fn resident(
+    mut settings: Settings,
+    paths: Paths,
+    open_settings: bool,
+    launch_origin: String,
+) -> Result<(), String> {
     struct Pending {
         next: Settings,
         editor: bool,
@@ -255,7 +261,11 @@ fn resident(mut settings: Settings, paths: Paths, open_settings: bool) -> Result
     let mut pending: Option<Pending> = None;
     let mut queued = None;
     let mut written_status = None;
+    let management = crate::management::Endpoint::start(launch_origin)?;
     'resident: loop {
+        if management.poll(&mut ui) {
+            break;
+        }
         let mut actions = ui.poll();
         if pending.is_none() {
             if let Some(action) = queued.take() {

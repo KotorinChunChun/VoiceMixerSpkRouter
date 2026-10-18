@@ -14,6 +14,9 @@ mod engine;
 mod instance;
 #[path = "spk_router/key_binding.rs"]
 mod key_binding;
+#[cfg(windows)]
+#[path = "spk_router/management.rs"]
+mod management;
 #[path = "spk_router/state.rs"]
 mod state;
 #[cfg(windows)]

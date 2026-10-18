@@ -125,6 +125,18 @@ impl Ui {
             self.tray.update_tip(&state.tooltip());
         }
     }
+    pub fn management_stop_block(&self) -> Option<&'static str> {
+        if self.applying {
+            Some("設定を適用中です。完了後にやり直してください。")
+        } else if self.editor.is_some() {
+            Some("設定画面を閉じてからやり直してください。未保存の編集は保持します。")
+        } else {
+            None
+        }
+    }
+    pub fn settings_is_open(&self) -> bool {
+        self.editor.is_some()
+    }
     pub fn show_settings(&mut self) {
         if self.editor.is_none() {
             hotkeys::set_editing(true);

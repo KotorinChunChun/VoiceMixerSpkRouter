@@ -22,20 +22,23 @@ pub enum Acquisition {
     Owner(Instance),
 }
 
-fn command(launch: Launch) -> ExistingCommand {
-    match launch {
+fn command(launch: Launch) -> Option<ExistingCommand> {
+    Some(match launch {
+        Launch::Startup => return None,
         Launch::Restore | Launch::Settings => ExistingCommand::ShowSettings,
         Launch::Stop => ExistingCommand::Exit,
         Launch::Mode(mode) => ExistingCommand::SetMode(mode),
-    }
+    })
 }
 
 impl Instance {
     /// Noneは診断専用。既存常駐へ転送せず、通常起動と同じ排他範囲を使う。
     pub fn acquire(launch: Option<Launch>) -> Result<Acquisition, String> {
         if let Some(launch) = launch {
-            if ui::send_existing(command(launch))? {
-                return Ok(Acquisition::Forwarded);
+            if let Some(command) = command(launch) {
+                if ui::send_existing(command)? {
+                    return Ok(Acquisition::Forwarded);
+                }
             }
             if launch == Launch::Stop {
                 return Err("VoiceMixerSpkRouterは起動していません".into());
@@ -47,9 +50,12 @@ impl Instance {
             (Self(handle), GetLastError() == ERROR_ALREADY_EXISTS)
         };
         if already_exists {
-            if let Some(launch) = launch {
+            if launch == Some(Launch::Startup) {
+                return Ok(Acquisition::Forwarded);
+            }
+            if let Some(command) = launch.and_then(command) {
                 for _ in 0..STARTUP_ATTEMPTS {
-                    if ui::send_existing(command(launch))? {
+                    if ui::send_existing(command)? {
                         return Ok(Acquisition::Forwarded);
                     }
                     thread::sleep(STARTUP_INTERVAL);
