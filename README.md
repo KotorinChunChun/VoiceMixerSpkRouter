@@ -10,6 +10,12 @@ VoiceMixer本体から独立したリポジトリです。単独でビルドで�
 - オーバーレイ、トレイ、設定画面を備えます。
 - Chrome/Edgeのタブ音声は付属の拡張から取得します。
 
+## ダウンロードして使う
+
+[GitHub Releasesの最新版](https://github.com/KotorinChunChun/VoiceMixerSpkRouter/releases/latest)から、Windows x64用ZIPをダウンロードしてください。ZIPをすべて展開し、`voicemixer-spk.exe`をダブルクリックします。Rust・Node.js・PowerShell 7の導入は不要です。Windows 11 x64が対象です。
+
+初回は設定画面が開き、取得停止・両出力OFFで起動します。同梱の「はじめに.html」に初期設定とブラウザ拡張の導入手順を記載しています。設定は展開先の`spk-settings.json`に新しく生成されます。
+
 ## ビルドと起動
 
 Windows、RustのMSVCツールチェーン、Visual Studio C++ビルドツール、Node.jsとnpmが必要です。

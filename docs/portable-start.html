@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VoiceMixerSpkRouterの使い方</title>
+<style>body{font:18px/1.8 system-ui,sans-serif;max-width:850px;margin:40px auto;padding:0 24px;background:#fffaf5;color:#292524}h1,h2{line-height:1.4}h2{border-left:5px solid #c05a00;padding-left:14px}a{color:#a84600}li{margin:10px 0}code{background:#f4e9de;padding:2px 5px;overflow-wrap:anywhere}</style>
+<h1>VoiceMixerSpkRouterの使い方</h1>
+<p>Windows 11の64ビット版向けです。Rust・Node.js・PowerShell 7のインストールは不要です。</p>
+<h2>起動する</h2>
+<ol><li>ZIPを右クリックして「すべて展開」を選び、書き込み可能なフォルダーへ展開します。</li>
+<li><code>VoiceMixerSpkRouter</code>フォルダーの<code>voicemixer-spk.exe</code>をダブルクリックします。ZIPの中から直接実行しないでください。</li>
+<li>初回は設定画面が開きます。取得は停止、出力1・2は両方OFFです。</li>
+<li>入力スピーカー・アプリ・ブラウザの必要なものを設定し、出力1・2の再生デバイスを選びます。使用する出力の「有効」をONにして「適用」を押します。</li>
+<li>オーバーレイ、またはShift+F1／F2／F3で取得元を選びます。選択中のキーをもう一度押すと停止、Shift+F4は常に停止です。キーは設定で変更できます。</li></ol>
+<h2>ブラウザ音声を使う</h2>
+<p><a href="browser-capture.html#install">拡張のインストール案内</a>から、同梱の<code>browser-extension</code>をChrome／Edgeへ読み込みます。次に<a href="browser-capture.html#setup">接続設定</a>でポート・認証トークン・ストリームキーを合わせ、対象タブの音声キャプチャを開始します。</p>
+<h2>設定と終了</h2>
+<p>設定はEXEと同じフォルダーの<code>spk-settings.json</code>へ保存します。認証トークンを含むので、このファイルを共有しないでください。初回起動時に利用者ごとの値を生成します。</p>
+<p>設定画面の「閉じる」は常駐を続けます。アプリを終了する場合は通知領域のアイコンを右クリックし「終了」を選びます。設定はトレイまたはオーバーレイから再び開けます。</p>
+<h2>更新する</h2>
+<p>アプリを終了して設定ファイルを退避し、新しいZIPの内容を同じフォルダーへ上書きします。ZIPには設定ファイルが入っていないので、保存済み設定は残ります。ブラウザ拡張も更新する場合は、送信を止めてから拡張の管理画面で再読み込みします。</p>
+<p><a href="https://github.com/KotorinChunChun/VoiceMixerSpkRouter">公開GitHub</a> ／ <a href="https://github.com/KotorinChunChun/VoiceMixerSpkRouter/blob/main/docs/spk-router.md">詳しい仕様と使い方</a></p>
+</html>
