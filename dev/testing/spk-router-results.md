@@ -20,3 +20,11 @@ v1.0.8は通常57件、GUI・監視6件、実EXE UI12ケース、ライフサイ
 公開確認: 専用リポジトリのvisibility=PUBLIC、認証なしHTTP 200、mainとREADME、ローカルとリモートのSHA一致を確認。GitHub ActionsのWindows検証も開始している。
 
 GitHub Actions Windows検証: [実行39144771665](https://github.com/KotorinChunChun/VoiceMixerSpkRouter/actions/runs/39144771665)がsuccess。公開ソースのクリーンチェックアウトで通常試験、Releaseビルド、npm ci、ブラウザ拡張ビルドが全工程成功した。測定対象は3dbe968（後続は完了資料のみ）。
+
+## v1.0.10 管理契約とインストーラ（2026-10-19）
+
+通常60件（Debugと静的CRT Release）、実GUI・キー監視6件、Release管理IPC15ケース、予約整理の模擬11件、実setup28ケースが成功。実setupは日本語・空白入り導入先、正式登録、設定なしの初回起動、無表示起動、設定編集中の更新・削除拒否、旧版相当fixtureからの版上げ、設定・トークンの全バイト保持、削除と再導入を確認した。fixtureは現行の管理対応ソースの版だけを下げた試験物で、過去の正式製品からの更新測定ではない。
+
+公開する最終setupでの証跡はtmp/installer-tests/検証 3f12e87680144fb7b971e527cde6c13c/。利用中だったv1.0.9と未保存編集を復元し、検証用の正式導入登録は解除した。他製品の並行操作に由来する本体設定の差分は操作記録の製品IDで区別し、上書きしていない。
+
+[GitHub Releases v1.0.10](https://github.com/KotorinChunChun/VoiceMixerSpkRouter/releases/tag/v1.0.10)へsetup・製品別台帳・SHA-256を公開。3 asset再取得と認証なしsetup取得でハッシュ一致。KotorinToys本体の変更・登録は対象外。実本体UIからの導入、実MSTSC接続、物理キー、聴感は今回の測定に含めない。[詳細](../history/v1.0.10/v1.0.10-imp.md)を参照。

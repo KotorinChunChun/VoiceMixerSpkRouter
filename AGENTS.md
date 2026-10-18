@@ -22,5 +22,5 @@
 |ブラウザ導入・設定|docs/spk-browser-capture.html|
 |構造・境界|docs/architecture/spk-router.md|
 |検証|dev/testing/spk-router-results.md、dev/scripts/tests/|
-|公開・配備|dev/RELEASE_RULE.md|
+|公開・配備|dev/RELEASE_RULE.md|\n|本体管理契約・導入更新削除|docs/kotorintoys-integration.md、maintenance/|
 |今回の実装|対応するdev/vX.Y.Z-imp.md、完了後dev/history/|

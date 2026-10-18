@@ -2,7 +2,7 @@
 
 Windows 11 x64向けの利用者単位Inno Setupです。GitHub ReleasesのVoiceMixerSpkRouter-1.0.10-setup.exeを実行します。既定の導入先は%LOCALAPPDATA%/Programs/VoiceMixerSpkRouter。管理者権限、Rust、Node.js、.NETの追加インストールは不要です。ブラウザ拡張は同梱しますが、登録とキャプチャ許可は同梱HTMLで案内します。
 
-設定・認証トークンは導入先のspk-settings.jsonへ初回生成します。配布物に個人設定は含めません。同じ導入先への更新・アンインストールでは設定を保持し、再導入時に再利用します。ポータブル版と開発版の設定は自動移動しません。
+設定・認証トークンは導入先のspk-settings.jsonへ初回生成します。配布物に個人設定は含めません。同じ導入先への更新・アンインストールでは設定を保持し、再導入時に再利用します。ポータブル版と開発版の設定は自動移動しません。旧ポータブル版・開発版が動作中なら終了してから導入版を起動してください。セッション内の二重常駐は行いません。
 
 設定画面が開いている間や適用中は管理側からの終了を拒否します。適用するか編集を破棄して設定画面を閉じ、更新・削除をやり直してください。プロセスの強制終了は行いません。既存の更新保守用CLI --stopは従来互換です。
 
@@ -20,7 +20,7 @@ Windows 11 x64向けの利用者単位Inno Setupです。GitHub ReleasesのVoice
 |公開台帳|VoiceMixerSpkRouter-packages.json|
 |ハッシュ|VoiceMixerSpkRouter-SHA256SUMS.txt|
 
-管理契約2のパイプはKotorinToys.<現在ユーザーSID>.voice-mixer-spk-router。現在ユーザーだけのACL、リモート接続拒否、同じ対話セッション、操作対象PID、要求期限を検証します。status/show/stopに対応し、showは既存設定画面を表示、stopは終了受理を返した後で正常終了します。管理操作のstopは音声取得停止モードとは異なります。
+管理契約2のパイプはKotorinToys.<現在ユーザーSID>.voice-mixer-spk-router。現在ユーザーだけのACL、リモート接続拒否、同じ対話セッション、操作対象PID、要求期限を検証します。status/show/stopに対応し、showは既存設定画面を表示、stopは終了受理を返した後で正常終了します。旧文字列形式はstatusだけに対応し、showとstopはexpectedPidを含むJSON要求が必要です。管理操作のstopは音声取得停止モードとは異なります。
 
 --startup --launch-origin host_manual|direct_task|via_kotorintoysで設定画面を開かず起動し、showを待ちます。単独起動の経路はstandaloneです。単独の初回起動は従来どおり設定を開きます。
 
