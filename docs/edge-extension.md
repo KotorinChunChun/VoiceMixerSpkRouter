@@ -1,5 +1,7 @@
 # ブラウザ音声キャプチャ拡張
 
+新規設定と旧版の空欄へ試験用の固定トークンは補完しません。認証トークン未設定の間は送信を開始せず、SpkRouterの設定に表示される利用者固有の値を明示的に保存してください。保存済みのポート・トークン・タブ別設定は保持します。
+
 ChromeとEdgeでVoiceMixer Edge PCM拡張を読み込み、対象タブの音声をSpkRouterへ送れます。
 
 [インストール案内](spk-browser-capture.html#install)と[接続設定・開始と停止](spk-browser-capture.html#setup)を参照してください。SpkRouterの基本設定からも同じ案内を開けます。

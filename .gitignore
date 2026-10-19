@@ -25,3 +25,18 @@ spk-router-project.json
 
 /maintenance/**/bin/
 /maintenance/**/obj/
+
+# セキュリティ点検: 秘密保管と生成物の公開混入を防ぐ
+/artifacts/
+/dev/history/*/logs/
+!.env.example
+secrets.json
+credentials.json
+.npmrc
+*.pfx
+*.p12
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3

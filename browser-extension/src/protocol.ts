@@ -32,7 +32,7 @@ export type EdgeSettings = CaptureConfig;
 
 export const DEFAULT_SETTINGS: CommonSettings = {
   port: 38471,
-  token: "runner-scenario-local-test"
+  token: ""
 };
 
 const SETTINGS_VERSION = 3;
@@ -41,7 +41,7 @@ const LEGACY_TAB_SETTINGS_KEY = "legacyTabSettingsV047";
 
 /**
  * v0.4.4より前はトークンと固定ストリームキーが空欄だった。
- * 明示保存された値は保護し、旧来の空欄だけをRunnerの既定値へ移行する。
+ * 明示保存された値は保護する。未設定・旧来の空欄へ試験用トークンを補完しない。
  */
 export async function loadSettings(): Promise<CommonSettings> {
   const stored = await chrome.storage.local.get([
