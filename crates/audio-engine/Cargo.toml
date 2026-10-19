@@ -45,7 +45,7 @@ tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "time", "
 tokio-tungstenite = { version = "0.30", optional = true }
 
 [target.'cfg(windows)'.dependencies]
-wasapi = "0.24"
+wasapi = "0.25"
 windows = { version = "0.62", features = [
   "Win32_Foundation",
   "Win32_Security_Credentials",

@@ -40,6 +40,7 @@ try {
         (Get-FileHash -LiteralPath $file.FullName).Hash.ToLowerInvariant()+'  '+$relative
     }
     [IO.File]::WriteAllLines((Join-Path $payload 'SHA256SUMS.txt'),[string[]]$hashes)
+    & (Join-Path $PSScriptRoot 'test-public-payload-security.ps1') -Payload $payload -ReportDirectory (Join-Path $project ("dev/history/v$version/logs/payload-security-"+[guid]::NewGuid().ToString('N'))) | Out-Host
     & (Join-Path $PSScriptRoot 'Prepare-Inno.ps1') | Out-Host
     if(-not $?){throw 'Innoの準備に失敗しました。'}
     $output=Join-Path $project ('release/Installer/v'+$version)

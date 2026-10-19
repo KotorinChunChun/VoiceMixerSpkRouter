@@ -1,39 +1,81 @@
 use futures_util::{SinkExt, StreamExt};
 use std::net::SocketAddr;
+use std::time::Duration;
 use tokio::net::{TcpListener, TcpStream};
-use tokio_tungstenite::{accept_async, tungstenite::Message};
+use tokio::task::JoinSet;
+use tokio_tungstenite::{
+    accept_async_with_config,
+    tungstenite::{protocol::WebSocketConfig, Message},
+    WebSocketStream,
+};
 
 use crate::{
     edge::{control::EdgeControlMessage, receiver::EdgeHub},
     error::{BackendError, Result},
 };
 
+const MAX_CONNECTIONS: usize = 32;
+const MAX_MESSAGE_BYTES: usize = 1024 * 1024;
+const AUTH_TIMEOUT: Duration = Duration::from_secs(5);
+
+fn require_loopback(addr: SocketAddr) -> Result<()> {
+    if !addr.ip().is_loopback() {
+        return Err(BackendError::InvalidOperation(
+            "WebSocketの待受はloopbackに限定します".into(),
+        ));
+    }
+    Ok(())
+}
+
+async fn accept_bounded(stream: TcpStream) -> Result<WebSocketStream<TcpStream>> {
+    let config = WebSocketConfig::default()
+        .max_message_size(Some(MAX_MESSAGE_BYTES))
+        .max_frame_size(Some(MAX_MESSAGE_BYTES));
+    tokio::time::timeout(AUTH_TIMEOUT, accept_async_with_config(stream, Some(config)))
+        .await
+        .map_err(|_| BackendError::InvalidOperation("WebSocket接続がタイムアウトしました".into()))?
+        .map_err(|e| BackendError::Audio(e.to_string()))
+}
+
 pub async fn run_pcm_server(addr: SocketAddr, hub: EdgeHub) -> Result<()> {
+    require_loopback(addr)?;
     let listener = TcpListener::bind(addr).await?;
     run_pcm_listener(listener, hub).await
 }
 
 /// 事前に確保した待受を使用し、起動時にポート競合を検出する。
 pub async fn run_pcm_listener(listener: TcpListener, hub: EdgeHub) -> Result<()> {
+    run_listener(listener, hub, true).await
+}
+
+async fn run_listener(listener: TcpListener, hub: EdgeHub, pcm: bool) -> Result<()> {
+    require_loopback(listener.local_addr()?)?;
+    // 所有する子タスクを待受停止時に破棄し、認証前の接続も無制限に残さない。
+    let mut connections = JoinSet::new();
     loop {
-        let (stream, peer) = listener.accept().await?;
-        if !peer.ip().is_loopback() {
-            continue;
+        tokio::select! {
+            biased;
+            _ = connections.join_next(), if !connections.is_empty() => {},
+            accepted = listener.accept() => {
+                let (stream, peer) = accepted?;
+                if !peer.ip().is_loopback() || connections.len() >= MAX_CONNECTIONS {
+                    continue;
+                }
+                let hub = hub.clone();
+                connections.spawn(async move {
+                    if pcm { handle_pcm_connection(stream, hub).await }
+                    else { handle_control_connection(stream, hub).await }
+                });
+            }
         }
-        let hub = hub.clone();
-        tokio::spawn(async move {
-            let _ = handle_pcm_connection(stream, hub).await;
-        });
     }
 }
 
 async fn handle_pcm_connection(stream: TcpStream, hub: EdgeHub) -> Result<()> {
-    let mut ws = accept_async(stream)
+    let mut ws = accept_bounded(stream).await?;
+    let first = tokio::time::timeout(AUTH_TIMEOUT, ws.next())
         .await
-        .map_err(|e| BackendError::Audio(e.to_string()))?;
-    let first = ws
-        .next()
-        .await
+        .map_err(|_| BackendError::InvalidOperation("WebSocket認証がタイムアウトしました".into()))?
         .ok_or(BackendError::ChannelDisconnected)?
         .map_err(|e| BackendError::Audio(e.to_string()))?;
     let hello: EdgeControlMessage = serde_json::from_str(
@@ -222,22 +264,28 @@ async fn handle_pcm_connection(stream: TcpStream, hub: EdgeHub) -> Result<()> {
 }
 
 pub async fn run_control_server(addr: SocketAddr, hub: EdgeHub) -> Result<()> {
+    require_loopback(addr)?;
     let listener = TcpListener::bind(addr).await?;
-    loop {
-        let (stream, _) = listener.accept().await?;
-        let hub = hub.clone();
-        tokio::spawn(async move {
-            let _ = handle_control_connection(stream, hub).await;
-        });
-    }
+    run_listener(listener, hub, false).await
 }
 
 async fn handle_control_connection(stream: TcpStream, hub: EdgeHub) -> Result<()> {
-    let mut ws = accept_async(stream)
-        .await
-        .map_err(|e| BackendError::Audio(e.to_string()))?;
+    let mut ws = accept_bounded(stream).await?;
     let mut authorized_key: Option<String> = None;
-    while let Some(msg) = ws.next().await {
+    let deadline = tokio::time::Instant::now() + AUTH_TIMEOUT;
+    loop {
+        let next = if authorized_key.is_none() {
+            tokio::time::timeout_at(deadline, ws.next())
+                .await
+                .map_err(|_| {
+                    BackendError::InvalidOperation("WebSocket認証がタイムアウトしました".into())
+                })?
+        } else {
+            ws.next().await
+        };
+        let Some(msg) = next else {
+            break;
+        };
         let msg = msg.map_err(|e| BackendError::Audio(e.to_string()))?;
         if !msg.is_text() {
             continue;
@@ -261,13 +309,17 @@ async fn handle_control_connection(stream: TcpStream, hub: EdgeHub) -> Result<()
                     .authenticate(token.as_deref(), protocol_version)
                     .is_err()
                 {
-                    continue;
+                    return Err(BackendError::InvalidOperation(
+                        "WebSocket認証に失敗しました".into(),
+                    ));
                 }
                 if stream_key.trim().is_empty()
                     || !(1..=2).contains(&channels)
                     || !(8_000..=192_000).contains(&sample_rate)
                 {
-                    continue;
+                    return Err(BackendError::InvalidOperation(
+                        "WebSocket形式が不正です".into(),
+                    ));
                 }
                 authorized_key = Some(stream_key.clone());
                 if let Some(stream) = hub.get(&stream_key) {
@@ -349,6 +401,101 @@ mod tests {
             .unwrap()
             .into(),
         )
+    }
+
+    #[tokio::test]
+    async fn websocket_servers_reject_wildcard_bind() {
+        let address = "0.0.0.0:0".parse().unwrap();
+        assert!(super::run_pcm_server(address, EdgeHub::default())
+            .await
+            .is_err());
+        assert!(super::run_control_server(address, EdgeHub::default())
+            .await
+            .is_err());
+        let listener = TcpListener::bind(address).await.unwrap();
+        assert!(super::run_pcm_listener(listener, EdgeHub::default())
+            .await
+            .is_err());
+    }
+
+    #[tokio::test]
+    async fn authentication_has_a_deadline_on_both_channels() {
+        for pcm in [true, false] {
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let address = listener.local_addr().unwrap();
+            let task = tokio::spawn(async move {
+                let (stream, _) = listener.accept().await.unwrap();
+                if pcm {
+                    super::handle_pcm_connection(stream, EdgeHub::default()).await
+                } else {
+                    super::handle_control_connection(stream, EdgeHub::default()).await
+                }
+            });
+            let (_client, _) = connect_async(format!("ws://{address}")).await.unwrap();
+            let error = tokio::time::timeout(
+                super::AUTH_TIMEOUT + std::time::Duration::from_secs(2),
+                task,
+            )
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap_err();
+            assert!(error.to_string().contains("タイムアウト"));
+        }
+    }
+
+    #[tokio::test]
+    async fn oversized_messages_are_rejected_before_authentication() {
+        let listener = Arc::new(TcpListener::bind("127.0.0.1:0").await.unwrap());
+        let (mut client, task) = connect(listener, EdgeHub::default()).await;
+        let _ = client
+            .send(Message::Text(
+                "x".repeat(super::MAX_MESSAGE_BYTES + 1).into(),
+            ))
+            .await;
+        tokio::time::timeout(std::time::Duration::from_secs(2), task)
+            .await
+            .unwrap()
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn stopping_listener_closes_owned_clients_and_releases_pcm_lease() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let hub = EdgeHub::default();
+        let server_hub = hub.clone();
+        let task = tokio::spawn(super::run_pcm_listener(listener, server_hub));
+        let (mut socket, _) = connect_async(format!("ws://{address}")).await.unwrap();
+        socket.send(hello(&hub, "shutdown")).await.unwrap();
+        let _ = next_control(&mut socket).await;
+        let _ = next_control(&mut socket).await;
+        task.abort();
+        assert!(task.await.unwrap_err().is_cancelled());
+        let result = tokio::time::timeout(std::time::Duration::from_secs(2), socket.next())
+            .await
+            .unwrap();
+        assert!(result.is_none() || matches!(result, Some(Err(_)) | Some(Ok(Message::Close(_)))));
+        assert!(hub.acquire_pcm_lease("shutdown", 48_000, 2).is_ok());
+    }
+
+    #[tokio::test]
+    async fn unauthenticated_connections_cannot_exceed_listener_limit() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let task = tokio::spawn(super::run_pcm_listener(listener, EdgeHub::default()));
+        let mut clients = Vec::new();
+        for _ in 0..super::MAX_CONNECTIONS {
+            clients.push(tokio::net::TcpStream::connect(address).await.unwrap());
+        }
+        let over_limit = tokio::net::TcpStream::connect(address).await.unwrap();
+        tokio::time::timeout(std::time::Duration::from_secs(2), over_limit.readable())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(over_limit.try_read(&mut [0u8; 1]).unwrap(), 0);
+        task.abort();
+        let _ = task.await;
     }
 
     async fn next_control(

@@ -59,6 +59,7 @@ try {
         (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant() + '  ' + $relative
     }
     [IO.File]::WriteAllLines((Join-Path $package 'SHA256SUMS.txt'),[string[]]$hashes)
+    & (Join-Path $PSScriptRoot 'test-public-payload-security.ps1') -Payload $package -ReportDirectory (Join-Path $projectRoot ("dev/history/v$version/logs/payload-security-"+[guid]::NewGuid().ToString('N'))) | Out-Host
     $zip = Join-Path $output "VoiceMixerSpkRouter-v$version-windows-x64.zip"
     Compress-Archive -LiteralPath $package -DestinationPath $zip -CompressionLevel Optimal -Force
     $zipHash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
