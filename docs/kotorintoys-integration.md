@@ -1,6 +1,6 @@
 # 導入・更新・削除とKotorinToys連携
 
-Windows 11 x64向けの利用者単位Inno Setupです。GitHub ReleasesのVoiceMixerSpkRouter-1.0.10-setup.exeを実行します。既定の導入先は%LOCALAPPDATA%/Programs/VoiceMixerSpkRouter。管理者権限、Rust、Node.js、.NETの追加インストールは不要です。ブラウザ拡張は同梱しますが、登録とキャプチャ許可は同梱HTMLで案内します。
+Windows 11 x64向けの利用者単位Inno Setupです。GitHub ReleasesのVoiceMixerSpkRouter-1.0.11-setup.exeを実行します。既定の導入先は%LOCALAPPDATA%/Programs/VoiceMixerSpkRouter。管理者権限、Rust、Node.js、.NETの追加インストールは不要です。ブラウザ拡張は同梱しますが、登録とキャプチャ許可は同梱HTMLで案内します。
 
 設定・認証トークンは導入先のspk-settings.jsonへ初回生成します。配布物に個人設定は含めません。同じ導入先への更新・アンインストールでは設定を保持し、再導入時に再利用します。ポータブル版と開発版の設定は自動移動しません。旧ポータブル版・開発版が動作中なら終了してから導入版を起動してください。セッション内の二重常駐は行いません。
 
@@ -16,7 +16,7 @@ Windows 11 x64向けの利用者単位Inno Setupです。GitHub ReleasesのVoice
 |導入EXE|VoiceMixerSpkRouter.exe|
 |登録|HKCU/Software/Microsoft/Windows/CurrentVersion/Uninstall/KotorinToys.VoiceMixerSpkRouter_is1|
 |導入定義|ルートのtool.json|
-|setup|VoiceMixerSpkRouter-1.0.10-setup.exe|
+|setup|VoiceMixerSpkRouter-1.0.11-setup.exe|
 |公開台帳|VoiceMixerSpkRouter-packages.json|
 |ハッシュ|VoiceMixerSpkRouter-SHA256SUMS.txt|
 

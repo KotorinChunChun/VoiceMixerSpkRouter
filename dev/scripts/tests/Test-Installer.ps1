@@ -3,6 +3,7 @@ param([Parameter(Mandatory)][string]$Installer,[string]$PreviousInstaller)
 $ErrorActionPreference='Stop';Set-StrictMode -Version Latest
 $setup=(Resolve-Path -LiteralPath $Installer).Path
 $project=Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))
+$expectedVersion=(Get-Content -LiteralPath (Join-Path $project 'tool.json') -Raw | ConvertFrom-Json).version
 $root=Join-Path $project ('tmp/installer-tests/検証 '+[guid]::NewGuid().ToString('N'));[void][IO.Directory]::CreateDirectory($root)
 $install=Join-Path $root '導入先 日本語';$exe=Join-Path $install 'VoiceMixerSpkRouter.exe'
 $config=Join-Path $install 'spk-settings.json'
@@ -98,7 +99,8 @@ try {
  Check ((Install $setup) -eq 0 -and $process.WaitForExit(15000)) '稼働中の正常停止と保持付き更新'
  $process.Dispose();$process=$null
  Check ((Get-FileHash -LiteralPath $config).Hash -eq $hash) '更新後も設定・トークンの全バイトを保持'
- Check ((Get-Item $exe).VersionInfo.FileVersion -like '1.0.10*') '更新先EXEの版を確認'
+ $versionInfo=(Get-Item $exe).VersionInfo
+ Check ("$($versionInfo.FileMajorPart).$($versionInfo.FileMinorPart).$($versionInfo.FileBuildPart)" -eq $expectedVersion) '更新先EXEの版を確認'
  StartApp
  Check ((Get-FileHash -LiteralPath $config).Hash -eq $hash) '更新後の再起動と設定再利用'
  StopApp
