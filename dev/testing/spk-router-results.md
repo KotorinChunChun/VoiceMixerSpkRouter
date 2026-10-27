@@ -28,3 +28,9 @@ GitHub Actions Windows検証: [実行39144771665](https://github.com/KotorinChun
 公開する最終setupでの証跡はtmp/installer-tests/検証 3f12e87680144fb7b971e527cde6c13c/。利用中だったv1.0.9と未保存編集を復元し、検証用の正式導入登録は解除した。他製品の並行操作に由来する本体設定の差分は操作記録の製品IDで区別し、上書きしていない。
 
 [GitHub Releases v1.0.10](https://github.com/KotorinChunChun/VoiceMixerSpkRouter/releases/tag/v1.0.10)へsetup・製品別台帳・SHA-256を公開。3 asset再取得と認証なしsetup取得でハッシュ一致。KotorinToys本体の変更・登録は対象外。実本体UIからの導入、実MSTSC接続、物理キー、聴感は今回の測定に含めない。[詳細](../history/v1.0.10/v1.0.10-imp.md)を参照。
+
+## v1.0.11 利用案内の公開（2026-10-27）
+
+通常回帰60件、拡張の回帰28件、予約整理の模擬11件に成功。配布用EXEのx64・静的CRT、製品の版と識別、拡張参照、同梱案内、全217ファイルのハッシュと設定非同梱を確認した。Vite 7.3.6の開発用依存で検出された問題は7.3.7へ更新し、npmの監査0件・拡張の再試験を確認した。
+
+[GitHub Releases v1.0.11](https://github.com/KotorinChunChun/VoiceMixerSpkRouter/releases/tag/v1.0.11)にsetup・製品台帳・SHA-256を公開し、認証なしの取得を含め再取得とハッシュ一致を確認した。利用中の正式導入は停止・更新していないため、今回のsetup実インストール・実音声・物理キー・実リモート接続は未測定。[詳細](../history/v1.0.11/v1.0.11-imp.md)を参照。
