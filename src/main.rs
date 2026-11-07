@@ -42,3 +42,14 @@ fn main() {
         std::process::exit(1);
     }
 }
+
+#[cfg(test)]
+mod product_definition_tests {
+    #[test]
+    fn installer_definition_matches_binary_version() {
+        let definition: serde_json::Value =
+            serde_json::from_str(include_str!("../tool.json")).unwrap();
+        assert_eq!(definition["version"], env!("CARGO_PKG_VERSION"));
+        assert_eq!(definition["version"], crate::config::APP_VERSION);
+    }
+}
