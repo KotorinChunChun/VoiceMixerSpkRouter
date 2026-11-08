@@ -13,9 +13,9 @@ use audio_mixer_backend::{
 use std::path::Path;
 
 #[derive(Debug, Clone, PartialEq)]
-pub(super) struct Route {
+pub(crate) struct Route {
     pub(super) input: Option<NodeProperties>,
-    pub(super) outputs: [Option<String>; 2],
+    pub(crate) outputs: [Option<String>; 2],
 }
 
 pub(crate) fn endpoint_id(id: &str) -> Result<String, String> {
@@ -26,12 +26,43 @@ pub(crate) fn same_endpoint(input: Option<&str>, output: Option<&str>) -> bool {
     matches!((input, output), (Some(a), Some(b)) if !a.is_empty() && a == b)
 }
 
+#[derive(Debug)]
+pub(crate) struct RouteError {
+    #[cfg_attr(not(debug_assertions), allow(dead_code))]
+    pub code: &'static str,
+    #[cfg_attr(not(debug_assertions), allow(dead_code))]
+    pub field: &'static str,
+    pub detail: String,
+}
+impl RouteError {
+    fn new(code: &'static str, field: &'static str, detail: impl Into<String>) -> Self {
+        Self {
+            code,
+            field,
+            detail: detail.into(),
+        }
+    }
+}
+
+pub(crate) const OUTPUT_FIELDS: [&str; 2] = ["outputs[0].deviceId", "outputs[1].deviceId"];
+
+#[cfg(test)]
 fn resolve_route_with(
     settings: &Settings,
     own_executable: Option<&Path>,
-    mut resolve: impl FnMut(&str) -> Result<String, String>,
+    resolve: impl FnMut(&str) -> Result<String, String>,
 ) -> Result<Route, String> {
-    settings.validate()?;
+    plan_route(settings, own_executable, resolve).map_err(|error| error.detail)
+}
+
+pub(crate) fn plan_route(
+    settings: &Settings,
+    own_executable: Option<&Path>,
+    mut resolve: impl FnMut(&str) -> Result<String, String>,
+) -> Result<Route, RouteError> {
+    settings
+        .validate()
+        .map_err(|detail| RouteError::new("invalid_settings", "settings", detail))?;
     if settings.mode == Mode::Stopped || !settings.mode_enabled(settings.mode) {
         return Ok(Route {
             input: None,
@@ -40,7 +71,8 @@ fn resolve_route_with(
     }
     let input = match settings.mode {
         Mode::Device => NodeProperties::EndpointLoopback {
-            endpoint_id: resolve(&settings.device_id)?,
+            endpoint_id: resolve(&settings.device_id)
+                .map_err(|e| RouteError::new("device_unavailable", "inputDeviceId", e))?,
             filter: ApplicationFilter::default(),
             capture_mode: EndpointCaptureMode::EndpointLoopback,
             gain_db: 0.0,
@@ -48,12 +80,20 @@ fn resolve_route_with(
         },
         Mode::Application => {
             if settings.application_path.as_os_str().is_empty() {
-                return Err("取得するアプリを選択してください".into());
+                return Err(RouteError::new(
+                    "app_required",
+                    "mode",
+                    "取得するアプリを選択してください",
+                ));
             }
             if own_executable.is_some_and(|own| {
                 normalize_exe_path(own) == normalize_exe_path(&settings.application_path)
             }) {
-                return Err("VoiceMixerSpkRouter自身の音声は取得できません".into());
+                return Err(RouteError::new(
+                    "own_application",
+                    "mode",
+                    "VoiceMixerSpkRouter自身の音声は取得できません",
+                ));
             }
             NodeProperties::ProcessExe {
                 exe_path: settings.application_path.clone(),
@@ -73,13 +113,18 @@ fn resolve_route_with(
         if !output.enabled {
             continue;
         }
-        let endpoint = resolve(&output.endpoint_id)?;
+        let endpoint = resolve(&output.endpoint_id)
+            .map_err(|e| RouteError::new("device_unavailable", OUTPUT_FIELDS[index], e))?;
         if matches!(&input, NodeProperties::EndpointLoopback { endpoint_id, .. } if same_endpoint(Some(endpoint_id), Some(&endpoint)))
         {
-            return Err(format!(
-                "取得元と出力{}（{}）が同じ再生デバイスです。別のデバイスを選択してください",
-                index + 1,
-                settings.output_labels[index]
+            return Err(RouteError::new(
+                "route_loop",
+                OUTPUT_FIELDS[index],
+                format!(
+                    "取得元と出力{}（{}）が同じ再生デバイスです。別のデバイスを選択してください",
+                    index + 1,
+                    settings.output_labels[index]
+                ),
             ));
         }
         if outputs.iter().flatten().any(|other| other == &endpoint) {
@@ -95,11 +140,12 @@ fn resolve_route_with(
 }
 
 pub(super) fn resolve_route(settings: &Settings) -> Result<Route, String> {
-    resolve_route_with(
+    plan_route(
         settings,
         std::env::current_exe().ok().as_deref(),
         endpoint_id,
     )
+    .map_err(|error| error.detail)
 }
 
 pub(super) fn project(settings: &Settings) -> (PersistedConfiguration, NodeId, [NodeId; 2]) {

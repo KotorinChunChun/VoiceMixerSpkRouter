@@ -7,7 +7,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub const APP_VERSION: &str = "1.0.15";
+pub const APP_VERSION: &str = "1.0.16";
 pub const APP_NAME: &str = "VoiceMixerSpkRouter";
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -115,6 +115,11 @@ pub struct Settings {
 }
 impl Default for Settings {
     fn default() -> Self {
+        Self::defaults_with_token(uuid::Uuid::new_v4().to_string())
+    }
+}
+impl Settings {
+    pub(crate) fn defaults_with_token(browser_token: String) -> Self {
         Self {
             mode: Mode::Stopped,
             input_enabled: [true; 3],
@@ -135,7 +140,7 @@ impl Default for Settings {
                 },
             ],
             browser_port: 18766,
-            browser_token: uuid::Uuid::new_v4().to_string(),
+            browser_token,
             browser_stream_key: "spk-router".into(),
             overlay_mode: OverlayMode::Always,
             startup_mode: None,
