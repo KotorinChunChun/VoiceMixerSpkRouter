@@ -6,7 +6,7 @@ use super::{
 use crate::{
     catalog::{application_choices, device_choices},
     config::{Mode, OverlayMode, Settings},
-    key_binding::{key_choices, Hotkey, KeyMode, HOTKEY_COUNT, HOTKEY_LABELS},
+    key_binding::{default_hotkeys, key_choices, Hotkey, KeyMode, HOTKEY_COUNT, HOTKEY_LABELS},
 };
 use std::{
     cell::{Cell, RefCell},
@@ -477,12 +477,22 @@ impl SettingsWindow {
                 REPOSITORY_LINK,
                 20,
                 536,
-                430,
+                300,
                 32,
             )?;
             s.building_page.set(1);
             s.build_hotkeys(settings)?;
             s.building_page.set(2);
+            s.control(
+                "BUTTON",
+                "初期値に戻す",
+                BS_PUSHBUTTON as u32,
+                Command::ResetPage as usize,
+                334,
+                CONTENT_OFFSET + 496,
+                166,
+                32,
+            )?;
             s.message = s.control("STATIC", warning, 0, 334, 20, 494, 792, 34)?;
             s.control(
                 "BUTTON",
@@ -578,6 +588,52 @@ impl SettingsWindow {
             24,
         )?;
         Ok(())
+    }
+    pub(super) fn reset_page(&mut self) {
+        let page = unsafe { SendMessageW(self.tab, TCM_GETCURSEL, None, None).0 };
+        if page == 1 {
+            for (index, key) in default_hotkeys().iter().enumerate() {
+                self.set_hotkey(index, key);
+            }
+            self.key_selection_changed();
+        } else if page == 0 {
+            let defaults = Settings::default();
+            for (i, id) in [
+                &defaults.device_id,
+                &defaults.outputs[0].endpoint_id,
+                &defaults.outputs[1].endpoint_id,
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                if let Some(index) = self.device_values[i].iter().position(|v| &v.0 == id) {
+                    unsafe {
+                        SendMessageW(self.devices[i], CB_SETCURSEL, Some(WPARAM(index)), None);
+                    }
+                }
+            }
+            if let Some(index) = self
+                .app_values
+                .iter()
+                .position(|v| v.0 == defaults.application_path)
+            {
+                unsafe {
+                    SendMessageW(self.app, CB_SETCURSEL, Some(WPARAM(index)), None);
+                }
+            }
+            unsafe {
+                SendMessageW(self.overlay, CB_SETCURSEL, Some(WPARAM(2)), None);
+            }
+            self.overlay_edited = true;
+            for (handle, label) in self.labels.into_iter().zip(&defaults.output_labels) {
+                set_text(handle, label);
+            }
+            for (handle, enabled) in self.inputs.into_iter().zip(defaults.input_enabled) {
+                check(handle, enabled);
+            }
+            self.app_path();
+            self.input_selection_changed();
+        }
     }
     pub(super) fn key_selection_changed(&self) {
         for (index, row) in self.keys.iter().enumerate() {
@@ -927,6 +983,10 @@ impl SettingsWindow {
     }
     #[cfg(test)]
     pub(super) fn set_hotkey_for_test(&self, index: usize, binding: &Hotkey) {
+        self.set_hotkey(index, binding);
+        self.key_selection_changed();
+    }
+    fn set_hotkey(&self, index: usize, binding: &Hotkey) {
         let row = &self.keys[index];
         for (handle, value) in row[..5].iter().zip([
             binding.enabled,
@@ -952,7 +1012,6 @@ impl SettingsWindow {
                 None,
             );
         }
-        self.key_selection_changed();
     }
 }
 

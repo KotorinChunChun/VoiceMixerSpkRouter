@@ -180,6 +180,42 @@ pub(super) unsafe fn draw_overlay(dc: HDC, bounds: RECT, state: &DisplayState) {
 mod tests {
     use super::*;
     #[test]
+    fn settings_button_is_accented_in_rendered_overlay() {
+        use windows::Win32::Graphics::Gdi::{CreateCompatibleBitmap, GetDC, GetPixel, ReleaseDC};
+        let bounds = RECT {
+            left: 0,
+            top: 0,
+            right: OVERLAY_WIDTH,
+            bottom: 160,
+        };
+        let mut settings = Settings::default();
+        unsafe {
+            let screen = GetDC(None);
+            let dc = CreateCompatibleDC(Some(screen));
+            let bitmap = CreateCompatibleBitmap(screen, bounds.right, bounds.bottom);
+            let previous = SelectObject(dc, bitmap.into());
+            let rect = control_rect(Command::Show, settings.input_enabled).unwrap();
+            let mut pixels = Vec::new();
+            for editing in [false, true] {
+                for (mode, phase) in [
+                    (Mode::Stopped, Phase::Stopped),
+                    (Mode::Device, Phase::Running),
+                ] {
+                    settings.mode = mode;
+                    let state = DisplayState::new(&settings, phase, "", "", editing);
+                    draw_overlay(dc, bounds, &state);
+                    pixels.push(GetPixel(dc, rect.left + 2, rect.top + 2).0);
+                }
+            }
+            SelectObject(dc, previous);
+            let _ = DeleteObject(bitmap.into());
+            let _ = DeleteDC(dc);
+            ReleaseDC(None, screen);
+            assert_eq!(pixels, [0x003c73bd; 4]);
+        }
+    }
+
+    #[test]
     fn only_selected_input_shows_progress_or_audio_state() {
         let mut settings = Settings::default();
         settings.mode = Mode::Browser;

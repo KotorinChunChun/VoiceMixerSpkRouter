@@ -210,6 +210,11 @@ impl Ui {
                         editor.set_page(1);
                     }
                 }
+                Command::ResetPage if !self.applying => {
+                    if let Some(editor) = &mut self.editor {
+                        editor.reset_page();
+                    }
+                }
                 Command::Refresh => {
                     if let Some(editor) = &mut self.editor {
                         if let Err(message) = editor.refresh() {
@@ -485,6 +490,61 @@ mod tests {
         // HWND、キー、クラスの所有を解放してから同じUIを再構築できること。
         let reopened = Ui::new(&settings).unwrap();
         assert!(reopened.tray.stop_key_available());
+    }
+
+    #[test]
+    #[ignore = "実設定ウィンドウのボタンを操作する試験"]
+    fn reset_button_applies_only_the_current_page_and_cancel_discards() {
+        use windows::Win32::UI::WindowsAndMessaging::{GetDlgItem, SendMessageW, BM_CLICK};
+        let defaults = Settings::default();
+        let mut saved = defaults.clone();
+        saved.outputs[0].endpoint_id.clear();
+        saved.outputs[0].name = "未選択".into();
+        saved.startup_mode = Some(Mode::Browser);
+        saved.browser_port = 18767;
+        saved.browser_stream_key = "test-stream".into();
+        saved.output_labels[0] = "検証用".into();
+        saved.hotkeys[0].key = "F21".into();
+        let mut ui = Ui::new(&saved).unwrap();
+        ui.show_settings();
+        let click = |ui: &mut Ui, command: Command| {
+            let hwnd = ui.editor.as_ref().unwrap().hwnd();
+            unsafe {
+                let button = GetDlgItem(Some(hwnd), command as i32).unwrap();
+                SendMessageW(button, BM_CLICK, None, None);
+            }
+            ui.poll()
+        };
+        assert!(click(&mut ui, Command::ResetPage).is_empty());
+        let draft = ui.editor.as_ref().unwrap().read().unwrap();
+        assert_eq!(draft.outputs, defaults.outputs);
+        assert_eq!(draft.output_labels, defaults.output_labels);
+        assert_eq!(draft.hotkeys, saved.hotkeys);
+        assert_eq!(draft.browser_token, saved.browser_token);
+        assert_eq!(draft.browser_port, saved.browser_port);
+        assert_eq!(draft.browser_stream_key, saved.browser_stream_key);
+        assert_eq!(draft.startup_mode, saved.startup_mode);
+        assert_eq!(ui.settings, saved);
+
+        ui.editor.as_ref().unwrap().set_page(1);
+        assert!(click(&mut ui, Command::ResetPage).is_empty());
+        let draft = ui.editor.as_ref().unwrap().read().unwrap();
+        assert_eq!(draft.hotkeys, defaults.hotkeys);
+        assert_eq!(draft.outputs, defaults.outputs);
+        assert_eq!(ui.settings, saved);
+        assert!(click(&mut ui, Command::Cancel).is_empty());
+        ui.show_settings();
+        assert_eq!(ui.editor.as_ref().unwrap().read().unwrap(), saved);
+
+        assert!(click(&mut ui, Command::ResetPage).is_empty());
+        let actions = click(&mut ui, Command::Save);
+        let [Action::Configure(draft)] = actions.as_slice() else {
+            panic!("適用操作から設定要求が発行されない");
+        };
+        assert_eq!(draft.outputs, defaults.outputs);
+        assert_eq!(ui.settings, saved);
+        ui.settings_saved(draft);
+        assert_eq!(&ui.settings, draft.as_ref());
     }
 
     #[test]

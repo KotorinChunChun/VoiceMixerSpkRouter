@@ -7,7 +7,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub const APP_VERSION: &str = "1.0.12";
+pub const APP_VERSION: &str = "1.0.13";
 pub const APP_NAME: &str = "VoiceMixerSpkRouter";
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -122,11 +122,18 @@ impl Default for Settings {
             device_id: DEFAULT_CONSOLE_ENDPOINT.into(),
             device_name: "既定のデバイス".into(),
             application_path: PathBuf::new(),
-            outputs: std::array::from_fn(|_| Output {
-                endpoint_id: String::new(),
-                name: "未選択".into(),
-                enabled: false,
-            }),
+            outputs: [
+                Output {
+                    endpoint_id: DEFAULT_CONSOLE_ENDPOINT.into(),
+                    name: "既定のデバイス".into(),
+                    enabled: false,
+                },
+                Output {
+                    endpoint_id: String::new(),
+                    name: "未選択".into(),
+                    enabled: false,
+                },
+            ],
             browser_port: 18766,
             browser_token: uuid::Uuid::new_v4().to_string(),
             browser_stream_key: "spk-router".into(),
@@ -287,6 +294,7 @@ mod tests {
     fn output_selection_and_duplicate_validation() {
         let mut s = Settings::default();
         s.outputs[0].enabled = true;
+        s.outputs[0].endpoint_id.clear();
         assert!(s.validate().is_err());
         s.outputs[0].endpoint_id = "one".into();
         s.validate().unwrap();

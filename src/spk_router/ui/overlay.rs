@@ -434,7 +434,7 @@ impl DisplayState {
                     self.outputs[i],
                 )
             }
-            Command::Show => (format!("設定{}", key_suffix(&self.keys[4])), self.editing),
+            Command::Show => (format!("設定{}", key_suffix(&self.keys[4])), true),
             Command::ToggleOverlay => {
                 let seconds = REMAINING.load(Ordering::Relaxed);
                 (
@@ -730,7 +730,16 @@ mod tests {
         assert_eq!(state.control_label(Command::Application).0, "アプリ");
         assert_eq!(state.control_label(Command::Device).0, "デバイス[F1]");
         assert_eq!(state.control_label(Command::Output1).0, "配信用 OFF");
-        assert_eq!(state.control_label(Command::Show).0, "設定");
+        for editing in [false, true] {
+            for (mode, phase) in [
+                (Mode::Stopped, Phase::Stopped),
+                (Mode::Device, Phase::Running),
+            ] {
+                s.mode = mode;
+                let state = DisplayState::new(&s, phase, "", "", editing);
+                assert_eq!(state.control_label(Command::Show), ("設定".into(), true));
+            }
+        }
     }
 }
 
