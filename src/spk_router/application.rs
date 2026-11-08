@@ -361,7 +361,7 @@ fn resident(
         }
         let meter = worker.meters.lock().unwrap().clone();
         ui.update_meters(meter.as_ref());
-        ui.update(&settings, status.phase, &status.message);
+        ui.update_status(&settings, &status);
         if worker.is_finished() {
             failure = Some("音声ワーカーが終了しました".into());
             break;

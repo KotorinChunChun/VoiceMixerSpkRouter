@@ -1,7 +1,7 @@
 #[path = "engine/browser.rs"]
 mod browser;
 #[path = "engine/routing.rs"]
-mod routing;
+pub(crate) mod routing;
 #[path = "engine/session.rs"]
 mod session;
 use crate::{

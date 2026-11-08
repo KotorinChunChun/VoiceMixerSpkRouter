@@ -18,6 +18,14 @@ pub(super) struct Route {
     pub(super) outputs: [Option<String>; 2],
 }
 
+pub(crate) fn endpoint_id(id: &str) -> Result<String, String> {
+    resolve_endpoint_id(id, DeviceDirection::Render).map_err(|error| error.to_string())
+}
+
+pub(crate) fn same_endpoint(input: Option<&str>, output: Option<&str>) -> bool {
+    matches!((input, output), (Some(a), Some(b)) if !a.is_empty() && a == b)
+}
+
 fn resolve_route_with(
     settings: &Settings,
     own_executable: Option<&Path>,
@@ -66,7 +74,7 @@ fn resolve_route_with(
             continue;
         }
         let endpoint = resolve(&output.endpoint_id)?;
-        if matches!(&input, NodeProperties::EndpointLoopback { endpoint_id, .. } if endpoint_id == &endpoint)
+        if matches!(&input, NodeProperties::EndpointLoopback { endpoint_id, .. } if same_endpoint(Some(endpoint_id), Some(&endpoint)))
         {
             return Err(format!(
                 "取得元と出力{}（{}）が同じ再生デバイスです。別のデバイスを選択してください",
@@ -87,9 +95,11 @@ fn resolve_route_with(
 }
 
 pub(super) fn resolve_route(settings: &Settings) -> Result<Route, String> {
-    resolve_route_with(settings, std::env::current_exe().ok().as_deref(), |id| {
-        resolve_endpoint_id(id, DeviceDirection::Render).map_err(|error| error.to_string())
-    })
+    resolve_route_with(
+        settings,
+        std::env::current_exe().ok().as_deref(),
+        endpoint_id,
+    )
 }
 
 pub(super) fn project(settings: &Settings) -> (PersistedConfiguration, NodeId, [NodeId; 2]) {

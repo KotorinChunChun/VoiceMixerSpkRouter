@@ -4,7 +4,7 @@ use super::{
 };
 use crate::{
     config::{write_json, Mode, Settings},
-    state::{Phase, Status},
+    state::{Phase, Status, WaitReason},
     telemetry::{Collector, Snapshot},
 };
 use audio_mixer_backend::{
@@ -18,6 +18,27 @@ use std::{
     time::{Duration, Instant},
 };
 
+fn app_running(path: &Path) -> Option<bool> {
+    use audio_mixer_backend::windows::process_watcher::{list_processes, normalize_exe_path};
+    let file = path.file_name()?.to_string_lossy();
+    let target = normalize_exe_path(path);
+    let processes = list_processes();
+    if processes
+        .iter()
+        .any(|p| p.exe_path.as_deref().map(normalize_exe_path).as_deref() == Some(target.as_str()))
+    {
+        Some(true)
+    } else if processes.is_empty()
+        || processes
+            .iter()
+            .any(|p| p.exe_path.is_none() && p.exe_name.eq_ignore_ascii_case(&file))
+    {
+        None
+    } else {
+        Some(false)
+    }
+}
+
 const DEVICE_READY_TIMEOUT: Duration = Duration::from_secs(3);
 const BROWSER_HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(3);
 
@@ -27,6 +48,7 @@ pub(super) struct Resident {
     outputs: [NodeId; 2],
     route: Option<Route>,
     browser: BrowserReceiver,
+    app_presence: Option<(std::path::PathBuf, Instant, Option<bool>)>,
     meters: Collector,
 }
 
@@ -44,6 +66,7 @@ impl Resident {
             input,
             outputs,
             route: None,
+            app_presence: None,
             browser: BrowserReceiver::default(),
             meters: Collector::new(input, outputs),
         })
@@ -237,7 +260,44 @@ impl Resident {
                     | RuntimeState::Starting
             )
         };
-        Ok(self.with_browser_status(if waiting {
+        let reason = match settings.mode {
+            Mode::Browser => match backend.edge.get(&settings.browser_stream_key) {
+                None => Some(WaitReason::TabDisconnected),
+                Some(stream) => match stream.state(BROWSER_HEARTBEAT_TIMEOUT) {
+                    EdgeStreamState::Disconnected | EdgeStreamState::Timeout => {
+                        Some(WaitReason::TabDisconnected)
+                    }
+                    EdgeStreamState::Stopped => Some(WaitReason::Audio),
+                    EdgeStreamState::Running if !stream.pcm_recent(BROWSER_HEARTBEAT_TIMEOUT) => {
+                        Some(WaitReason::Audio)
+                    }
+                    _ => None,
+                },
+            },
+            Mode::Application if waiting => {
+                let path = &settings.application_path;
+                if self.app_presence.as_ref().is_none_or(|(old, at, _)| {
+                    old != path || at.elapsed() >= Duration::from_secs(2)
+                }) {
+                    let running = app_running(path);
+                    self.app_presence = Some((path.clone(), Instant::now(), running));
+                }
+                match self
+                    .app_presence
+                    .as_ref()
+                    .and_then(|(_, _, running)| *running)
+                {
+                    Some(false) => Some(WaitReason::AppNotRunning),
+                    Some(true) if matches!(input.state, RuntimeState::Starting) => {
+                        Some(WaitReason::Preparing)
+                    }
+                    _ => None,
+                }
+            }
+            _ if matches!(input.state, RuntimeState::Starting) => Some(WaitReason::Preparing),
+            _ => None,
+        };
+        let mut status = if waiting {
             Status::new(
                 settings.mode,
                 Phase::Waiting,
@@ -253,7 +313,12 @@ impl Resident {
                     format!("{}を取得中（出力OFF）", settings.mode.label())
                 },
             )
-        }))
+        };
+        status.wait_reason = reason;
+        if let Some(reason) = reason {
+            status.message = reason.detail().into();
+        }
+        Ok(self.with_browser_status(status))
     }
 
     fn with_browser_status(&self, mut status: Status) -> Status {
@@ -381,12 +446,29 @@ mod tests {
             backend.edge.receiver_state(&settings.browser_stream_key),
             audio_mixer_backend::edge::control::EdgeCaptureState::Running
         );
+        assert_eq!(
+            resident.tick(&settings).unwrap().wait_reason,
+            Some(WaitReason::TabDisconnected)
+        );
         let stream = backend.edge.get(&settings.browser_stream_key).unwrap();
         let lease = backend
             .edge
             .acquire_pcm_lease(settings.browser_stream_key.clone(), 48_000, 2)
             .unwrap();
         assert_eq!(resident.tick(&settings).unwrap().phase, Phase::Running);
+        assert_eq!(
+            resident.tick(&settings).unwrap().wait_reason,
+            Some(WaitReason::Audio)
+        );
+        backend
+            .edge
+            .push_pcm_f32le(&settings.browser_stream_key, &[0; 3840])
+            .unwrap();
+        assert_eq!(
+            resident.tick(&settings).unwrap().wait_reason,
+            None,
+            "無音PCMは未着ではない"
+        );
 
         settings.mode = Mode::Stopped;
         resident.configure(&settings).unwrap();
@@ -414,6 +496,10 @@ mod tests {
         let mut samples = [1.0; 480];
         assert_eq!(stream.jitter.read_into(&mut samples), 0);
         drop(lease);
+        assert_eq!(
+            resident.tick(&settings).unwrap().wait_reason,
+            Some(WaitReason::TabDisconnected)
+        );
         settings.mode = Mode::Stopped;
         settings.input_enabled[2] = false;
         resident.configure(&settings).unwrap();

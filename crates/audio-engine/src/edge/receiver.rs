@@ -56,6 +56,7 @@ pub struct EdgeStream {
     connected: AtomicBool,
     capture_stopped: AtomicBool,
     last_heartbeat: Mutex<Instant>,
+    last_pcm: Mutex<Option<Instant>>,
     resampler: Mutex<StreamResampler>,
     correction: Mutex<EdgeCorrection>,
     tab_id: AtomicU64,
@@ -81,6 +82,7 @@ impl EdgeStream {
             connected: AtomicBool::new(connected),
             capture_stopped: AtomicBool::new(false),
             last_heartbeat: Mutex::new(Instant::now()),
+            last_pcm: Mutex::new(None),
             resampler: Mutex::new(
                 StreamResampler::new(INTERNAL_CHANNELS).expect("stereo resampler"),
             ),
@@ -93,6 +95,7 @@ impl EdgeStream {
     }
     fn connect(&self, sample_rate: u32, channels: u16) {
         // A reconnect must not replay packets owned by the previous PCM lease.
+        *self.last_pcm.lock() = None;
         self.jitter.reset();
         self.capture_stopped.store(false, Ordering::Release);
         self.sample_rate.store(sample_rate, Ordering::Release);
@@ -101,7 +104,11 @@ impl EdgeStream {
         *self.correction.lock() = EdgeCorrection::default();
         self.heartbeat();
     }
+    pub fn pcm_recent(&self, timeout: Duration) -> bool {
+        self.last_pcm.lock().is_some_and(|at| at.elapsed() <= timeout)
+    }
     fn set_capture_state(&self, state: EdgeCaptureState) {
+        *self.last_pcm.lock() = None;
         match state {
             EdgeCaptureState::Stopped => {
                 self.capture_stopped.store(true, Ordering::Release);
@@ -691,6 +698,9 @@ impl EdgeHub {
             * stream.correction_ratio(stereo.len() / 2, rate);
         let converted = stream.resampler.lock().process(&stereo, ratio)?;
         stream.heartbeat();
+        if !bytes.is_empty() {
+            *stream.last_pcm.lock() = Some(Instant::now());
+        }
         Ok(stream.jitter.push(&converted))
     }
 }
