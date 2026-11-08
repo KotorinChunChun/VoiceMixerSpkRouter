@@ -665,3 +665,7 @@ mod observer_tests {
         drop(reserved);
     }
 }
+
+#[cfg(debug_assertions)]
+#[path = "ui/manual_preview.rs"]
+pub mod manual_preview;

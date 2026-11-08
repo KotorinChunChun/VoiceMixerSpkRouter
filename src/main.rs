@@ -36,6 +36,11 @@ fn run() -> Result<(), String> {
         }
         return Err("隔離テストは開発版の --test-session 単独指定で実行してください".into());
     }
+    #[cfg(all(windows, debug_assertions))]
+    if args.first().is_some_and(|arg| arg == "--manual-preview") {
+        if args.len()!=2 {return Err("新しい専用出力先を指定してください".into());}
+        return ui::manual_preview::run(std::path::Path::new(&args[1]));
+    }
     let default_path = std::env::current_exe()
         .map_err(|e| e.to_string())?
         .with_file_name("spk-settings.json");
