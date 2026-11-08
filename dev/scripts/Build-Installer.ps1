@@ -24,6 +24,7 @@ try {
         $guide=Join-Path $payload $name
         [IO.File]::WriteAllText($guide,([IO.File]::ReadAllText($guide).Replace('voicemixer-spk.exe','VoiceMixerSpkRouter.exe')))
     }
+    [IO.File]::WriteAllText((Join-Path $payload 'README.txt'),"スタートメニューのVoiceMixerSpkRouterから起動してください。"+[Environment]::NewLine+"詳しい手順は はじめに.html を開いてください。"+[Environment]::NewLine+"Rust・Node.js・PowerShell 7は不要です。"+[Environment]::NewLine)
     $docs=Join-Path $payload 'docs';[void][IO.Directory]::CreateDirectory($docs)
     Copy-Item -LiteralPath (Join-Path $project 'docs/kotorintoys-integration.md') -Destination $docs
     & dotnet publish maintenance/SpkRouter.Maintenance.csproj -c Release -r win-x64 --self-contained true -p:DebugType=None -p:DebugSymbols=false -o (Join-Path $payload 'maintenance') --nologo | Out-Host
