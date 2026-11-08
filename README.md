@@ -2,8 +2,6 @@
 
 Windowsの再生デバイス・特定アプリ・ブラウザの音声を選び、2台の再生デバイスへ転送する常駐アプリです。
 
-VoiceMixer本体から独立したリポジトリです。単独でビルドでき、VoiceMixer本体やMic版のチェックアウトは不要です。
-
 - 取得元は再生デバイス・アプリ・ブラウザ・停止の4択。
 - 出力1・2は個別にON/OFF。停止すると取得と転送を止めます。
 - 既定キーはShift+F1〜F4。変更・無効化と、共存／上書きを各キーで選べます。
@@ -26,22 +24,43 @@ OBSなどの配信・録音ソフトにも音声を選ぶ機能はあります�
 
 初回は設定画面が開き、取得停止・両出力OFFで起動します。同梱の「はじめに.html」に初期設定とブラウザ拡張の導入手順を記載しています。設定は導入先のspk-settings.jsonへ生成し、更新・削除では保持します。
 
-KotorinToys向けの管理契約と配布台帳を同梱しています。本体側の修正・製品登録は今回の対象外です。[導入・更新・削除と本体連携](docs/kotorintoys-integration.md)に製品IDと配布仕様をまとめています。
+KotorinToys向けの管理契約と配布台帳を同梱しています。[導入・更新・削除と本体連携](docs/kotorintoys-integration.md)に製品IDと配布仕様をまとめています。
 
-## ビルドと起動
+## 画面で見る使い方
 
-Windows、RustのMSVCツールチェーン、Visual Studio C++ビルドツール、Node.jsとnpmが必要です。
+画像はv1.0.16の撮影用環境です。認証トークンはダミーで、音声転送・外部接続・グローバルキーは動かしていません。
 
-```powershell
-git clone https://github.com/KotorinChunChun/VoiceMixerSpkRouter.git
-cd VoiceMixerSpkRouter
-npm --prefix .\browser-extension ci
-npm --prefix .\browser-extension run build
-pwsh -NoProfile -File .\dev\scripts\Install-SpkRouter.ps1
-pwsh -NoProfile -File .\dev\scripts\Start-SpkRouter.ps1 -Mode Settings
-```
+### 1. 基本設定を開く
 
-設定はrelease/SpkRouter/spk-settings.jsonへ保存します。認証トークンを含むため共有しないでください。初回は取得停止・両出力OFFで起動します。
+取得元と出力先を選びます。初回は取得停止・両出力OFFです。転送したい出力だけ「有効」にしてください。
+
+![取得元と2つの出力先を設定する画面](docs/images/readme/01-settings.png)
+
+### 2. 切り替えキーを決める
+
+「キー設定」で有効・修飾キー・キー・共存／上書きを変更します。「共存」は他アプリにも同じ入力を渡します。
+
+![取得元ごとのショートカット設定](docs/images/readme/02-keys.png)
+
+### 3. 入力エラーを直す
+
+ブラウザ取得には有効なポート・認証トークン・ストリームキーが必要です。画像はポートを0にして適用を拒否した例です。エラーが出たら該当欄を修正します。
+
+![不正なポートを保存せず理由を表示](docs/images/readme/03-invalid-port.png)
+
+### 4. 分かりやすい名前を付けて保存する
+
+出力名は「配信先」など用途に合わせて変更できます。「適用」で保存し、「設定を保存しました。」を確認します。
+
+![出力名を配信先に変更して保存した結果](docs/images/readme/04-applied.png)
+
+### 5. 使わない取得元を無効にする
+
+「入力アプリを使用する」「入力ブラウザを使用する」を外すと、対応する欄が無効になります。変更を残す場合は「適用」を押してください。
+
+![不要な入力のチェックを外した状態](docs/images/readme/05-inputs.png)
+
+## 詳しい手順
 
 [操作と仕様](docs/spk-router.md)、[ブラウザ拡張の導入・設定](docs/spk-browser-capture.html)、[開発者ガイド](docs/DEVELOPERS_GUIDE.md)を参照してください。
 
