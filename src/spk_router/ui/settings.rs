@@ -6,7 +6,9 @@ use super::{
 use crate::{
     catalog::{application_choices, device_choices},
     config::{Mode, OverlayMode, Settings},
-    key_binding::{default_hotkeys, key_choices, Hotkey, KeyMode, HOTKEY_COUNT, HOTKEY_LABELS},
+    key_binding::{
+        default_hotkeys, key_choices, Hotkey, KeyMode, ModifierSide, HOTKEY_COUNT, HOTKEY_LABELS,
+    },
 };
 use std::{
     cell::{Cell, RefCell},
@@ -175,6 +177,25 @@ fn checked(hwnd: HWND) -> bool {
 fn check(hwnd: HWND, value: bool) {
     unsafe {
         SendMessageW(hwnd, BM_SETCHECK, Some(WPARAM(value as usize)), None);
+    }
+}
+const MODIFIER_CHOICES: [&str; 5] = ["不要", "左", "右", "左|右", "左&右"];
+fn modifier_index(enabled: bool, side: ModifierSide) -> usize {
+    match (enabled, side) {
+        (false, _) => 0,
+        (true, ModifierSide::Left) => 1,
+        (true, ModifierSide::Right) => 2,
+        (true, ModifierSide::Either) => 3,
+        (true, ModifierSide::Both) => 4,
+    }
+}
+fn read_modifier(hwnd: HWND) -> (bool, ModifierSide) {
+    match selected(hwnd) {
+        1 => (true, ModifierSide::Left),
+        2 => (true, ModifierSide::Right),
+        3 => (true, ModifierSide::Either),
+        4 => (true, ModifierSide::Both),
+        _ => (false, ModifierSide::Either),
     }
 }
 fn combo_items(hwnd: HWND, values: impl IntoIterator<Item = String>, index: usize) {
@@ -523,6 +544,14 @@ impl SettingsWindow {
     fn build_hotkeys(&mut self, settings: &Settings) -> Result<(), String> {
         let choices = key_choices();
         self.label("設定", 20, 68, 180)?;
+        for (label, x) in [
+            ("Ctrl", 274),
+            ("Shift", 350),
+            ("Alt", 426),
+            ("Windows", 502),
+        ] {
+            self.label(label, x, 68, 70)?;
+        }
         self.label("キー", 580, 68, 100)?;
         self.label("モード", 696, 68, 116)?;
         self.control("STATIC", "", SEPARATOR_STYLE, 351, 20, 174, 792, 2)?;
@@ -532,24 +561,29 @@ impl SettingsWindow {
             let key = &settings.hotkeys[index];
             let mut row = [HWND::default(); 7];
             // IDと保存配列は従来の意味を維持し、作成順と座標を表示順にする。
-            for (column, label, enabled, x, width) in [
-                (0, "有効", key.is_assigned(), 208, 60),
-                (2, "Ctrl", key.ctrl, 274, 62),
-                (1, "Shift", key.shift, 340, 70),
-                (4, "Alt", key.alt, 416, 58),
-                (3, "Windows", key.win, 480, 96),
+            row[0] = self.control(
+                "BUTTON",
+                "有効",
+                BS_AUTOCHECKBOX as u32,
+                HOTKEY_BASE + index * 10,
+                208,
+                y,
+                60,
+                28,
+            )?;
+            check(row[0], key.is_assigned());
+            for (column, enabled, side, x) in [
+                (2, key.ctrl, key.ctrl_side, 274),
+                (1, key.shift, key.shift_side, 350),
+                (4, key.alt, key.alt_side, 426),
+                (3, key.win, key.win_side, 502),
             ] {
-                row[column] = self.control(
-                    "BUTTON",
-                    label,
-                    BS_AUTOCHECKBOX as u32,
-                    HOTKEY_BASE + index * 10 + column,
-                    x,
-                    y,
-                    width,
-                    28,
-                )?;
-                check(row[column], enabled);
+                row[column] = self.combo(HOTKEY_BASE + index * 10 + column, x, y, 70)?;
+                combo_items(
+                    row[column],
+                    MODIFIER_CHOICES.map(str::to_owned),
+                    modifier_index(enabled, side),
+                );
             }
             row[5] = self.combo(HOTKEY_BASE + index * 10 + 5, 580, y, 108)?;
             let label = if key.key == "None" {
@@ -823,12 +857,20 @@ impl SettingsWindow {
         settings.input_enabled = self.inputs.map(checked);
         for (index, row) in self.keys.iter().enumerate() {
             let key = text(row[5]);
+            let (shift, shift_side) = read_modifier(row[1]);
+            let (ctrl, ctrl_side) = read_modifier(row[2]);
+            let (win, win_side) = read_modifier(row[3]);
+            let (alt, alt_side) = read_modifier(row[4]);
             settings.hotkeys[index] = Hotkey {
                 enabled: checked(row[0]) && key != "なし",
-                shift: checked(row[1]),
-                ctrl: checked(row[2]),
-                win: checked(row[3]),
-                alt: checked(row[4]),
+                shift,
+                shift_side,
+                ctrl,
+                ctrl_side,
+                win,
+                win_side,
+                alt,
+                alt_side,
                 key: if key == "なし" { "None".into() } else { key },
                 mode: if selected(row[6]) == 1 {
                     KeyMode::Override
@@ -988,14 +1030,21 @@ impl SettingsWindow {
     }
     fn set_hotkey(&self, index: usize, binding: &Hotkey) {
         let row = &self.keys[index];
-        for (handle, value) in row[..5].iter().zip([
-            binding.enabled,
-            binding.shift,
-            binding.ctrl,
-            binding.win,
-            binding.alt,
+        check(row[0], binding.enabled);
+        for (handle, (enabled, side)) in row[1..5].iter().zip([
+            (binding.shift, binding.shift_side),
+            (binding.ctrl, binding.ctrl_side),
+            (binding.win, binding.win_side),
+            (binding.alt, binding.alt_side),
         ]) {
-            check(*handle, value);
+            unsafe {
+                SendMessageW(
+                    *handle,
+                    CB_SETCURSEL,
+                    Some(WPARAM(modifier_index(enabled, side))),
+                    None,
+                );
+            }
         }
         let key = if binding.key == "None" {
             "なし"
@@ -1193,9 +1242,29 @@ mod tests {
         let mut draft: [Hotkey; HOTKEY_COUNT] = std::array::from_fn(|index| Hotkey {
             enabled: index != 1,
             shift: index == 0,
+            shift_side: if index == 0 {
+                super::ModifierSide::Left
+            } else {
+                super::ModifierSide::Either
+            },
             ctrl: index == 1,
+            ctrl_side: if index == 1 {
+                super::ModifierSide::Right
+            } else {
+                super::ModifierSide::Either
+            },
             win: index == 2,
+            win_side: if index == 2 {
+                super::ModifierSide::Both
+            } else {
+                super::ModifierSide::Either
+            },
             alt: index == 3,
+            alt_side: if index == 3 {
+                super::ModifierSide::Either
+            } else {
+                super::ModifierSide::Either
+            },
             key: ["A", "F24", "Z", "F5", "F6", "F7"][index].into(),
             mode: if index % 2 == 0 {
                 crate::key_binding::KeyMode::Override

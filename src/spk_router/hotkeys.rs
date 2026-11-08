@@ -1,5 +1,5 @@
 //! 専用フックで押下と解放を観測し、上書き指定の一致キーだけを抑止する。
-use crate::key_binding::{Hotkey, KeyMode};
+use crate::key_binding::{modifier_masks_overlap, Hotkey, KeyMode};
 use std::{
     cell::RefCell,
     sync::{
@@ -44,7 +44,7 @@ const MODIFIER_KEYS: [usize; 8] = [0xa0, 0xa1, 0xa2, 0xa3, 0xa4, 0xa5, 0x5b, 0x5
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Binding {
     action: usize,
-    modifiers: u32,
+    modifiers: [u8; 4],
     vk: usize,
     mode: KeyMode,
 }
@@ -52,10 +52,10 @@ fn bindings(values: &[(usize, Hotkey)]) -> Result<Vec<Binding>, String> {
     let mut result: Vec<Binding> = Vec::new();
     for (action, key) in values.iter().filter(|(_, k)| k.is_assigned()) {
         let vk = key.virtual_key()? as usize;
-        let modifiers = key.modifiers();
+        let modifiers = key.modifier_masks();
         if result
             .iter()
-            .any(|b| b.vk == vk && b.modifiers == modifiers)
+            .any(|b| b.vk == vk && modifier_masks_overlap(b.modifiers, modifiers))
         {
             return Err("同じキーを複数の操作に割り当てられません".into());
         }
@@ -109,13 +109,16 @@ impl KeyState {
         }
         let repeated = self.down[vk];
         self.down[vk] = pressed;
-        let modifiers = self.modifiers();
+        let modifiers =
+            [(0xa4, 0xa5), (0xa2, 0xa3), (0xa0, 0xa1), (0x5b, 0x5c)].map(|(left, right)| {
+                1 << (u8::from(self.down[left]) | (u8::from(self.down[right]) << 1))
+            });
         let mut events = vec![];
         if pressed && !repeated {
             if let Some(b) = self
                 .bindings
                 .iter()
-                .find(|b| b.vk == vk && b.modifiers == modifiers)
+                .find(|b| b.vk == vk && modifier_masks_overlap(b.modifiers, modifiers))
                 .cloned()
             {
                 events.push(b.action);
@@ -451,6 +454,60 @@ fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn modifier_sides_match_each_physical_press_combination() {
+        use crate::key_binding::{default_hotkeys, ModifierSide};
+        for (left_vk, right_vk, i) in [
+            (0xa4, 0xa5, 0),
+            (0xa2, 0xa3, 1),
+            (0xa0, 0xa1, 2),
+            (0x5b, 0x5c, 3),
+        ] {
+            for (side, expected) in [
+                (ModifierSide::Left, [false, true, false, false]),
+                (ModifierSide::Right, [false, false, true, false]),
+                (ModifierSide::Both, [false, false, false, true]),
+                (ModifierSide::Either, [false, true, true, true]),
+            ] {
+                let mut key = default_hotkeys()[0].clone();
+                key.shift = false;
+                match i {
+                    0 => {
+                        key.alt = true;
+                        key.alt_side = side;
+                    }
+                    1 => {
+                        key.ctrl = true;
+                        key.ctrl_side = side;
+                    }
+                    2 => {
+                        key.shift = true;
+                        key.shift_side = side;
+                    }
+                    _ => {
+                        key.win = true;
+                        key.win_side = side;
+                    }
+                }
+                for (press, expected) in expected.into_iter().enumerate() {
+                    let mut state = KeyState::new();
+                    state.replace_bindings(bindings(&[(1, key.clone())]).unwrap(), |_| false);
+                    if press & 1 != 0 {
+                        state.event(left_vk, true);
+                    }
+                    if press & 2 != 0 {
+                        state.event(right_vk, true);
+                    }
+                    assert_eq!(
+                        !state.event(0x70, true).is_empty(),
+                        expected,
+                        "{i} {side:?} {press}"
+                    );
+                }
+            }
+        }
+    }
+
     #[test]
     fn exact_modifiers_repeat_rebinding_and_missing_release_are_safe() {
         let key = crate::key_binding::default_hotkeys()[0].clone();

@@ -20,13 +20,48 @@ pub enum KeyMode {
     Override,
 }
 
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ModifierSide {
+    #[default]
+    Either,
+    Left,
+    Right,
+    Both,
+}
+impl ModifierSide {
+    pub fn mask(self) -> u8 {
+        match self {
+            Self::Left => 1 << 1,
+            Self::Right => 1 << 2,
+            Self::Both => 1 << 3,
+            Self::Either => 0b1110,
+        }
+    }
+    fn is_either(&self) -> bool {
+        *self == Self::Either
+    }
+}
+
+pub fn modifier_masks_overlap(a: [u8; 4], b: [u8; 4]) -> bool {
+    a.into_iter().zip(b).all(|(a, b)| a & b != 0)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Hotkey {
     pub enabled: bool,
     pub shift: bool,
+    #[serde(default, skip_serializing_if = "ModifierSide::is_either")]
+    pub shift_side: ModifierSide,
     pub ctrl: bool,
+    #[serde(default, skip_serializing_if = "ModifierSide::is_either")]
+    pub ctrl_side: ModifierSide,
     pub win: bool,
+    #[serde(default, skip_serializing_if = "ModifierSide::is_either")]
+    pub win_side: ModifierSide,
     pub alt: bool,
+    #[serde(default, skip_serializing_if = "ModifierSide::is_either")]
+    pub alt_side: ModifierSide,
     pub key: String,
     #[serde(default)]
     pub mode: KeyMode,
@@ -62,6 +97,17 @@ impl Hotkey {
         Err("キーはA〜ZまたはF1〜F24から選択してください".into())
     }
 
+    pub fn modifier_masks(&self) -> [u8; 4] {
+        [
+            (self.alt, self.alt_side),
+            (self.ctrl, self.ctrl_side),
+            (self.shift, self.shift_side),
+            (self.win, self.win_side),
+        ]
+        .map(|(enabled, side)| if enabled { side.mask() } else { 1 })
+    }
+
+    #[cfg(test)]
     pub fn modifiers(&self) -> u32 {
         self.alt as u32
             | ((self.ctrl as u32) << 1)
@@ -74,17 +120,23 @@ impl Hotkey {
             return "割当なし".into();
         }
         let mut labels = Vec::new();
-        for (enabled, label) in [
-            (self.ctrl, "Ctrl"),
-            (self.shift, "Shift"),
-            (self.alt, "Alt"),
-            (self.win, "Win"),
+        for (enabled, side, label) in [
+            (self.ctrl, self.ctrl_side, "Ctrl"),
+            (self.shift, self.shift_side, "Shift"),
+            (self.alt, self.alt_side, "Alt"),
+            (self.win, self.win_side, "Win"),
         ] {
             if enabled {
-                labels.push(label);
+                let prefix = match side {
+                    ModifierSide::Either => "",
+                    ModifierSide::Left => "左",
+                    ModifierSide::Right => "右",
+                    ModifierSide::Both => "左&右",
+                };
+                labels.push(format!("{prefix}{label}"));
             }
         }
-        labels.push(&self.key);
+        labels.push(self.key.clone());
         labels.join("+")
     }
 }
@@ -96,6 +148,10 @@ pub fn default_hotkeys() -> [Hotkey; HOTKEY_COUNT] {
         ctrl: false,
         win: false,
         alt: false,
+        alt_side: ModifierSide::Either,
+        ctrl_side: ModifierSide::Either,
+        shift_side: ModifierSide::Either,
+        win_side: ModifierSide::Either,
         mode: KeyMode::Coexist,
         key: if index < 4 {
             format!("F{}", index + 1)
@@ -111,8 +167,11 @@ pub fn validate_hotkeys(hotkeys: &[Hotkey; HOTKEY_COUNT]) -> Result<(), String> 
         if !key.is_assigned() {
             continue;
         }
-        let pair = (key.modifiers(), key.virtual_key()?);
-        if assigned.contains(&pair) {
+        let pair = (key.modifier_masks(), key.virtual_key()?);
+        if assigned
+            .iter()
+            .any(|&(masks, vk)| vk == pair.1 && modifier_masks_overlap(masks, pair.0))
+        {
             return Err("同じキーを複数の操作に割り当てられません".into());
         }
         assigned.push(pair);
@@ -164,6 +223,30 @@ mod tests {
         key.enabled = true;
         key.key = "None".into();
         assert!(!key.is_assigned());
+    }
+
+    #[test]
+    fn side_assignments_can_share_a_key_only_when_disjoint() {
+        let mut keys = default_hotkeys();
+        keys[0].shift_side = ModifierSide::Left;
+        keys[1] = keys[0].clone();
+        keys[1].shift_side = ModifierSide::Right;
+        assert!(validate_hotkeys(&keys).is_ok());
+        keys[1].shift_side = ModifierSide::Both;
+        assert!(validate_hotkeys(&keys).is_ok());
+        keys[1].shift_side = ModifierSide::Either;
+        assert!(validate_hotkeys(&keys).is_err());
+
+        let json = serde_json::to_value(&keys[0]).unwrap();
+        assert_eq!(json["shift"], true);
+        assert_eq!(json["shift_side"], "left");
+        assert_eq!(serde_json::from_value::<Hotkey>(json).unwrap(), keys[0]);
+        let mut legacy = serde_json::to_value(&keys[0]).unwrap();
+        legacy.as_object_mut().unwrap().remove("shift_side");
+        assert_eq!(
+            serde_json::from_value::<Hotkey>(legacy).unwrap().shift_side,
+            ModifierSide::Either
+        );
     }
 
     #[test]
