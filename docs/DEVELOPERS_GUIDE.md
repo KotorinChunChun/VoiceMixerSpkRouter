@@ -1,6 +1,6 @@
 # 開発者ガイド
 
-Rustの単独ワークスペースです。src/main.rsとsrc/spk_routerがアプリ、crates/audio-engineが取り込み時点の音声エンジンです。VoiceMixer本体へのパス依存・Git依存はありません。取り込み元の識別情報はdev/import-origin.jsonに記録し、元のGit履歴は公開していません。
+VoiceMixerSpkRouterは独立したRustワークスペースです。アプリのコードはsrc/main.rsとsrc/spk_routerにあり、取り込み時点の音声エンジンはcrates/audio-engineにあります。VoiceMixer本体へのパス依存・Git依存はありません。取り込み元の識別情報はdev/import-origin.jsonに記録し、元のGit履歴は公開していません。
 
 ブラウザ拡張はbrowser-extensionに置き、package-lock.jsonで依存を固定します。
 
@@ -11,7 +11,7 @@ npm --prefix .\browser-extension ci
 npm --prefix .\browser-extension run build
 ```
 
-GUI・実フック試験は他のSpkRouterを通常終了して実施します。実フック試験だけ専用キーの合成入力を許可し、製品では注入入力を無視します。
+GUI試験と実フック試験は、他のSpkRouterを通常終了してから行います。専用キーの合成入力を許可するのは実フック試験だけです。製品では注入入力を無視します。
 
 ```powershell
 cargo test --locked --bin voicemixer-spk -- --ignored --test-threads=1
@@ -23,6 +23,6 @@ pwsh -NoProfile -File .\dev\scripts\tests\Test-SpkRouterLifecycle.ps1 -Executabl
 
 ## インストーラの発行
 
-pwsh -NoProfile -File ./dev/scripts/Build-Installer.ps1で、CRT静的リンクの配布EXE・拡張・自己完結型.NET補助を同梱した利用者単位Innoを作成します。追加のビルド環境は.NET 10 SDKと、Prepare-Inno.ps1で検証・準備する固定版コンパイラです。既に検証したアプリ成果物の再梱包だけなら-SkipBuildを指定できます。
+pwsh -NoProfile -File ./dev/scripts/Build-Installer.ps1で、利用者単位のInnoインストーラを作成します。CRTを静的リンクした配布EXE、拡張、自己完結型の.NET補助プログラムを同梱します。追加で必要なのは.NET 10 SDKと、Prepare-Inno.ps1で検証・準備する固定版コンパイラです。既に検証したアプリ成果物を再梱包するだけなら-SkipBuildを指定できます。
 
 製品IDと本体への受け渡しは[連携ガイド](kotorintoys-integration.md)、公開条件は[配布規約](../dev/RELEASE_RULE.md)を参照してください。予約整理の模擬試験はdotnet run --project maintenance/tests/Maintenance.Tests.csproj --artifacts-path target/maintenance-tests -- tmp/reservation-testsです。実setup試験はdev/scripts/tests/Test-Installer.ps1を使い、既存の正式導入があれば中止します。
