@@ -67,3 +67,13 @@ KotorinToys向けの管理契約と配布台帳を同梱しています。[導�
 [操作と仕様](docs/spk-router.md)、[ブラウザ拡張の導入・設定](docs/spk-browser-capture.html)、[開発者ガイド](docs/DEVELOPERS_GUIDE.md)を参照してください。
 
 MSTSC前景のキー検知に対応しますが、OSが保護する操作や権限の異なるウィンドウまで抑止する保証はありません。実接続・物理キーと自動試験の範囲は[検証記録](dev/testing/spk-router-results.md)で区別します。
+
+## 使用言語とライブラリ
+
+- 使用言語はRust（本体）、TypeScript（ブラウザー拡張）、Python（音声抽出プラグイン）、C#（保守補助）です。
+- windows・wasapi（Windowsでの音声入出力）、Tokio（非同期処理）、hound・OxiAudio・mp3lame-encoder（音声ファイル処理）。音声抽出プラグインはPyTorch、torchaudio、DeepFilterNet、Demucsを使います。
+- 依存定義と資料 [本体の依存定義](Cargo.toml)・[音声エンジンの依存定義](crates/audio-engine/Cargo.toml)・[ブラウザー拡張の依存定義](browser-extension/package.json)・[音声抽出の依存定義](plugins/voice-extraction/requirements.txt)
+
+## ライセンス
+
+本アプリの独自コードと文書には[MITライセンス](LICENSE)が適用されます。第三者のコンポーネントや素材には、それぞれのライセンスが適用されます。
