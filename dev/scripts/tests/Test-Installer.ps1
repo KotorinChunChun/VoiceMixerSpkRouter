@@ -38,10 +38,13 @@ public static class InstallerWindow{
 $checks=[Collections.Generic.List[string]]::new();$process=$null;$number=0
 function Check([bool]$Value,[string]$Name){if(-not $Value){throw $Name};$checks.Add($Name);Write-Host "成功: $Name"}
 function Send([string]$Command){
- $pipe=[IO.Pipes.NamedPipeClientStream]::new('.',$pipeName,[IO.Pipes.PipeDirection]::InOut,[IO.Pipes.PipeOptions]::CurrentUserOnly)
+ $options=[IO.Pipes.PipeOptions]::CurrentUserOnly -bor [IO.Pipes.PipeOptions]::Asynchronous
+ $pipe=[IO.Pipes.NamedPipeClientStream]::new('.',$pipeName,[IO.Pipes.PipeDirection]::InOut,$options)
  try{$pipe.Connect(1500);$writer=[IO.StreamWriter]::new($pipe,[Text.UTF8Encoding]::new($false),1024,$true);$writer.AutoFlush=$true;$reader=[IO.StreamReader]::new($pipe)
  $line=if($Command -eq 'status'){'status'}else{@{command=$Command;expectedPid=$script:process.Id;requestId=[guid]::NewGuid().ToString('N')}|ConvertTo-Json -Compress}
- $writer.WriteLine($line);$task=$reader.ReadLineAsync();if(-not $task.Wait(2500)){throw '管理応答なし'};return ($task.Result|ConvertFrom-Json)
+ $task=$reader.ReadLineAsync();$writer.WriteLine($line)
+ if(-not $task.Wait(2500) -or -not $task.Result){throw '管理応答なし'}
+ return ($task.Result|ConvertFrom-Json)
  }finally{$pipe.Dispose()}
 }
 function Run([string]$File,[string[]]$Arguments){

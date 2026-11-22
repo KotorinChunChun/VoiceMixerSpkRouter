@@ -35,8 +35,10 @@ internal static class Program {
         using var writer=new StreamWriter(pipe,leaveOpen:true){AutoFlush=true};
         using var reader=new StreamReader(pipe,leaveOpen:true);
         var requestId=Guid.NewGuid().ToString("N");
+        // 旧版は返信直後の切断で未読の応答を破棄するため、先に読み取りを開始する。
+        var response=reader.ReadLineAsync(deadline.Token);
         await writer.WriteLineAsync(JsonSerializer.Serialize(new{command,expectedPid,requestId}).AsMemory(),deadline.Token);
-        var line=await reader.ReadLineAsync(deadline.Token)??throw new IOException("管理応答がありません。");
+        var line=await response??throw new IOException("管理応答がありません。");
         if(line.Length>8192)throw new IOException("管理応答の上限を超えました。");
         using var doc=JsonDocument.Parse(line);var reply=doc.RootElement;
         if(reply.GetProperty("protocolVersion").GetInt32()!=2||!reply.GetProperty("ready").GetBoolean()||
