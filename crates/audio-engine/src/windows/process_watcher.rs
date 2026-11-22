@@ -11,7 +11,7 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
-use sysinfo::System;
+use sysinfo::{ProcessRefreshKind, RefreshKind, System, UpdateKind};
 
 use crate::{
     audio::graph::{
@@ -49,7 +49,10 @@ pub fn normalize_exe_path(path: &Path) -> String {
 }
 
 pub fn list_processes() -> Vec<ProcessInfo> {
-    let system = System::new_all();
+    let system = System::new_with_specifics(
+        RefreshKind::nothing()
+            .with_processes(ProcessRefreshKind::nothing().with_exe(UpdateKind::Always)),
+    );
     #[cfg(windows)]
     let audio = active_audio_sessions();
     #[cfg(not(windows))]
