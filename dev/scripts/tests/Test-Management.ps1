@@ -14,10 +14,12 @@ public static class ManagementWindow{
  [DllImport("user32.dll")]public static extern IntPtr SendMessageW(IntPtr h,uint m,IntPtr w,IntPtr l);
 }
 "@
-function Send([string]$Line){
+function Send([string]$Line,[int]$ReadDelayMs=0){
  $pipe=[IO.Pipes.NamedPipeClientStream]::new('.',$pipeName,[IO.Pipes.PipeDirection]::InOut,[IO.Pipes.PipeOptions]::CurrentUserOnly)
  try{$pipe.Connect(2000);$writer=[IO.StreamWriter]::new($pipe, [Text.UTF8Encoding]::new($false),1024,$true);$writer.AutoFlush=$true;$reader=[IO.StreamReader]::new($pipe)
- $writer.WriteLine($Line);$task=$reader.ReadLineAsync();if(-not $task.Wait(2500)){throw '応答なし'};return ($task.Result|ConvertFrom-Json)
+ $writer.WriteLine($Line)
+ if($ReadDelayMs -gt 0){Start-Sleep -Milliseconds $ReadDelayMs}
+ $task=$reader.ReadLineAsync();if(-not $task.Wait(2500) -or -not $task.Result){throw '応答なし'};return ($task.Result|ConvertFrom-Json)
  }finally{$pipe.Dispose()}
 }
 $checks=[Collections.Generic.List[string]]::new()
@@ -40,6 +42,7 @@ try{
  Check ((Send '{"command":"stop"}').result -eq 'refused') 'PIDなしの変更要求を拒否'
  Check ((Send '{"command":"unknown"}').result -eq 'unsupported') '未知の操作を明示'
  Check ((Send 'invalid').result -eq 'failed') '不正な要求から復旧'
+ Check ((Send 'status' 100).pid -eq $process.Id) '読み取り開始が遅れても管理応答を受信'
  for($n=0;$n -lt 60;$n++){if((Send 'status').pid -ne $process.Id){throw '連続接続のPID不一致'}}
  Check $true '60回の連続接続で再接続競合がない'
  $idle=[IO.Pipes.NamedPipeClientStream]::new('.',$pipeName,[IO.Pipes.PipeDirection]::InOut);try{$idle.Connect(2000);Start-Sleep -Milliseconds 2200}finally{$idle.Dispose()}

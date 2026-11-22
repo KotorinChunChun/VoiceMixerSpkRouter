@@ -206,7 +206,8 @@ impl Endpoint {
                         Ok::<(), ()>(())
                     };
                     let _ = tokio::time::timeout(DEADLINE, exchange).await;
-                    let _ = connection.disconnect();
+                    // 接続ごとに別のインスタンスを使う。強制切断は未読の返信を破棄する。
+                    drop(connection);
                 }
             });
         });
