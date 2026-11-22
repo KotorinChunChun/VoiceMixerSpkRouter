@@ -27,11 +27,20 @@ cargo build --locked --bin voicemixer-spk --target-dir $build
 | `validate-route` | `mode` 必須、`patch` は任意 | `valid` または `rejected`。候補・解決ID・警告を返す。保存しない |
 | `apply` | `expectedRevision`、`patch` | `applied`、`unchanged`、`rejected`、`failed` |
 | `set-output` | `expectedRevision`、`output`（1/2）、`enabled` | `apply` と同じ。指定した出力だけを変更 |
+| `open-settings` | 追加指定なし | 基本設定を開く。開いている場合は選択中のタブと下書きを保持 |
+| `select-settings-page` | `page`（`basic` または `keys`） | タブを切り替え、両タブの下書きを保持 |
+| `edit-settings` | `patch` | 選択中のタブの項目を下書きに反映。保存しない |
+| `apply-settings` | `expectedRevision`。失敗注入時は `fault` | 両タブの下書きを検証・適用する。表示中のタブは維持 |
+| `close-settings` | 追加指定なし | 最後の適用以降の下書きを破棄し、確定設定を保持 |
 | `shutdown` | 追加指定なし | `ok` を返して対象セッションだけ終了 |
 
 `patch` は `mode`、`inputEnabled`（デバイス・アプリ・ブラウザの真偽値3つ）、`inputDeviceId`、`outputs` を指定できます。出力は2要素で、各要素は `null`（変更なし）または `deviceId`・`enabled` の変更分です。経路検証時のモードはトップレベルに指定します。ファイルパス・認証情報は受け付けません。
 
 試験用デバイスIDは `default`、`communications`、`speaker`、`speaker-alias`、`headphones`、`cable`、`disconnected`、`unselected`。初期状態は停止、出力1が `default`、出力2は未選択、どちらもOFF。 `default`・`speaker`・`speaker-alias` は同じ試験デバイス、`communications`・`headphones` も同一です。
+
+基本設定の編集には `inputEnabled`、`inputDeviceId`、`outputs` に加え、`browserPort`（整数）と `overlayMode`（`off`、`brief`、`always`）を指定できます。キー設定の編集には `hotkeys` を使用します。確定した6件は `state.hotkeys` で確認でき、同じ並び順の配列で、変更しない項目を `null` にします。未割り当ては `key: "None"`、`enabled: false` です。
+
+開いている間は `state.settingsEditor` にタブ名、編集開始時の `baseRevision`、下書きが変わったかを示す `dirty` が入ります。閉じている場合は `null` です。タブ切り替えや編集だけでは、確定設定とrevisionは進みません。隔離CLIで確定設定を別に変更した場合、編集開始時のrevisionと異なる下書きは `stale_settings_draft` で拒否します。画面の描画・フォーカス・クリップボードはWin32側で確認します。
 
 応答の `state.outputsEnabled` は設定上のON/OFF、`state.effectiveOutputs` は重複抑止後に採用された試験経路です。 `state.simulated` は常に `true` です。物理音声の出力成功を示すものではありません。 `issues` は `code`・`field`・`severity` を返します。 `revision` は設定が確定したときだけ進みます。 `apply`・`set-output` の `fault` に `audio`／`save`／`rollback` を指定すると失敗を注入できます。復旧も失敗したときは `rollback_failed` と `effectiveOutputs: null` を返します。
 

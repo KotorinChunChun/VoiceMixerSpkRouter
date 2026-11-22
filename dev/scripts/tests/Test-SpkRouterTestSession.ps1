@@ -160,6 +160,39 @@ try {
     Check ($r.result -eq 'applied' -and $r.revision -eq 4 -and -not $r.state.outputsEnabled[0] -and $r.state.outputsEnabled[1] -and $r.state.effectiveOutputs[1] -eq 'cable') '出力1のOFFは出力2に影響しない'
     $r = Invoke-Request $b 'status'
     Check ($r.revision -eq 0 -and $r.state.mode -eq 'stopped' -and (Fixture-Hash $b) -eq $bInitial) '他方の試験セッションは不変'
+
+    $beforeEditor = Fixture-Hash $a
+    $r = Invoke-Request $a 'open-settings'
+    Check ($r.state.settingsEditor.page -eq 'basic' -and -not $r.state.settingsEditor.dirty) '設定を開くと基本設定を選択'
+    $r = Invoke-Request $a 'edit-settings' @{patch=@{browserPort=0;overlayMode='brief'}}
+    Check ($r.state.settingsEditor.dirty -and (Fixture-Hash $a) -eq $beforeEditor) '基本設定の編集は下書きだけを変更'
+    $r = Invoke-Request $a 'apply-settings' @{expectedRevision=4}
+    Check ($r.result -eq 'rejected' -and $r.issues[0].code -eq 'invalid_settings' -and $r.state.settingsEditor.dirty -and (Fixture-Hash $a) -eq $beforeEditor) 'ポート0を拒否して下書きと確定設定を保持'
+    $null = Invoke-Request $a 'edit-settings' @{patch=@{browserPort=18766}}
+    $null = Invoke-Request $a 'select-settings-page' @{page='keys'}
+    $r = Invoke-Request $a 'edit-settings' @{patch=@{overlayMode='off'}}
+    Check ($r.issues[0].code -eq 'wrong_settings_page' -and $r.state.settingsEditor.page -eq 'keys') 'キー設定で基本設定の変更を拒否'
+    $key = $r.state.hotkeys[4] | ConvertTo-Json -Compress | ConvertFrom-Json -AsHashtable
+    $key.enabled = $true
+    $key.key = 'F8'
+    $null = Invoke-Request $a 'edit-settings' @{patch=@{hotkeys=@($null,$null,$null,$null,$key,$null)}}
+    $r = Invoke-Request $a 'open-settings'
+    Check ($r.state.settingsEditor.page -eq 'keys' -and $r.state.settingsEditor.dirty -and (Fixture-Hash $a) -eq $beforeEditor) '再表示で選択中のタブと下書きを保持'
+    $r = Invoke-Request $a 'apply-settings' @{expectedRevision=4;fault='save'}
+    Check ($r.result -eq 'failed' -and $r.revision -eq 4 -and $r.state.settingsEditor.dirty -and (Fixture-Hash $a) -eq $beforeEditor) '保存失敗でも下書きと直前の設定を保持'
+    $r = Invoke-Request $a 'apply-settings' @{expectedRevision=4}
+    Check ($r.result -eq 'applied' -and $r.revision -eq 5 -and $r.state.settingsEditor.page -eq 'keys' -and -not $r.state.settingsEditor.dirty -and $r.state.overlayMode -eq 'brief' -and $r.state.hotkeys[4].key -eq 'F8' -and (Fixture-Hash $a) -ne $beforeEditor) '両タブの編集を適用して同じタブに留まる'
+    $afterEditor = Fixture-Hash $a
+    $null = Invoke-Request $a 'select-settings-page' @{page='basic'}
+    $null = Invoke-Request $a 'edit-settings' @{patch=@{overlayMode='off'}}
+    $r = Invoke-Request $a 'close-settings'
+    Check ($null -eq $r.state.settingsEditor -and $r.state.overlayMode -eq 'brief' -and $r.revision -eq 5 -and (Fixture-Hash $a) -eq $afterEditor) '閉じると最後の適用以降の下書きだけ破棄'
+    $r = Invoke-Request $a 'open-settings'
+    $null = Invoke-Request $a 'edit-settings' @{patch=@{overlayMode='off'}}
+    $null = Invoke-Request $a 'apply' @{expectedRevision=5;patch=@{browserPort=18767}}
+    $r = Invoke-Request $a 'apply-settings' @{expectedRevision=6}
+    Check ($r.issues[0].code -eq 'stale_settings_draft' -and $r.state.browserPort -eq 18767 -and $r.state.overlayMode -eq 'brief') '開いた後の確定設定を古い下書きで上書きしない'
+    $null = Invoke-Request $a 'close-settings'
     $null = Invoke-Request $a 'shutdown'
     Check ($a.Process.WaitForExit(5000) -and $a.Process.ExitCode -eq 0 -and -not (Test-Path -LiteralPath (Session-Path $a))) 'shutdownで対象子だけ終了し試験領域を回収'
     $crash = Start-Session

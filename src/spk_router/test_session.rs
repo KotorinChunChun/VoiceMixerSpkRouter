@@ -1,10 +1,11 @@
 //! 開発用の隔離セッション。OS音声・常駐IPCには接続しない。
 use crate::{
-    config::{Mode, Settings},
+    config::{Mode, OverlayMode, Settings},
     engine::{
         commit_audio,
         routing::{plan_route, same_endpoint, Route, OUTPUT_FIELDS},
     },
+    key_binding::{Hotkey, HOTKEY_COUNT},
     state::Phase,
 };
 use serde::{Deserialize, Serialize};
@@ -124,8 +125,24 @@ struct Patch {
     input_enabled: Option<[bool; 3]>,
     input_device_id: Option<FixtureId>,
     outputs: Option<[Option<OutputPatch>; 2]>,
+    browser_port: Option<u16>,
+    overlay_mode: Option<OverlayMode>,
+    hotkeys: Option<[Option<Hotkey>; HOTKEY_COUNT]>,
 }
 impl Patch {
+    fn belongs_to(&self, page: SettingsPage) -> bool {
+        let basic = self.input_enabled.is_some()
+            || self.input_device_id.is_some()
+            || self.outputs.is_some()
+            || self.browser_port.is_some()
+            || self.overlay_mode.is_some();
+        self.mode.is_none()
+            && match page {
+                SettingsPage::Basic => self.hotkeys.is_none(),
+                SettingsPage::Keys => !basic,
+            }
+    }
+
     fn candidate(self, current: &Settings, mode: Option<Mode>) -> Settings {
         let mut next = current.clone();
         if let Some(mode) = mode.or(self.mode) {
@@ -136,6 +153,21 @@ impl Patch {
         }
         if let Some(id) = self.input_device_id {
             next.device_id = id.id().into();
+        }
+        if let Some(port) = self.browser_port {
+            next.browser_port = port;
+        }
+        if let Some(mode) = self.overlay_mode {
+            next.overlay_mode = mode;
+        }
+        for (current, key) in next
+            .hotkeys
+            .iter_mut()
+            .zip(self.hotkeys.unwrap_or_default())
+        {
+            if let Some(key) = key {
+                *current = key;
+            }
         }
         for (i, patch) in self.outputs.unwrap_or_default().into_iter().enumerate() {
             if let Some(patch) = patch {
@@ -172,6 +204,21 @@ struct Request {
     mode: Option<Mode>,
     patch: Option<Patch>,
     fault: Option<Fault>,
+    page: Option<SettingsPage>,
+}
+
+#[derive(Clone, Copy, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum SettingsPage {
+    Basic,
+    Keys,
+}
+
+struct SettingsEditor {
+    page: SettingsPage,
+    base_revision: u64,
+    base: Settings,
+    draft: Settings,
 }
 
 #[derive(Serialize)]
@@ -236,6 +283,7 @@ struct Session {
     settings: Settings,
     effective: Option<Route>,
     revision: u64,
+    editor: Option<SettingsEditor>,
 }
 impl Session {
     fn new() -> Result<Self, String> {
@@ -253,6 +301,7 @@ impl Session {
             settings,
             effective: Some(effective),
             revision: 0,
+            editor: None,
         })
     }
     fn state(&self) -> Value {
@@ -265,8 +314,17 @@ impl Session {
         json!({
             "mode": self.settings.mode,
             "phase": phase,
+            "inputEnabled": self.settings.input_enabled,
             "outputsEnabled": self.settings.outputs.each_ref().map(|o| o.enabled),
             "effectiveOutputs": self.effective.as_ref().map(|r| &r.outputs),
+            "browserPort": self.settings.browser_port,
+            "overlayMode": self.settings.overlay_mode,
+            "hotkeys": self.settings.hotkeys,
+            "settingsEditor": self.editor.as_ref().map(|editor| json!({
+                "page": editor.page,
+                "baseRevision": editor.base_revision,
+                "dirty": editor.draft != editor.base,
+            })),
             "simulated": true
         })
     }
@@ -307,15 +365,27 @@ impl Session {
                     .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
         });
         let command = match value["command"].as_str() {
-            Some(command @ ("status" | "validate-route" | "set-output" | "apply" | "shutdown")) => {
-                command
-            }
+            Some(
+                command @ ("status"
+                | "validate-route"
+                | "set-output"
+                | "apply"
+                | "shutdown"
+                | "open-settings"
+                | "select-settings-page"
+                | "edit-settings"
+                | "apply-settings"
+                | "close-settings"),
+            ) => command,
             _ => return (self.reject(id, None, "unknown_command", "command"), false),
         };
         let fields: &[&str] = match command {
             "validate-route" => &["mode", "patch"],
             "set-output" => &["expectedRevision", "output", "enabled", "fault"],
             "apply" => &["expectedRevision", "patch", "fault"],
+            "select-settings-page" => &["page"],
+            "edit-settings" => &["patch"],
+            "apply-settings" => &["expectedRevision", "fault"],
             _ => &[],
         };
         if object.keys().any(|k| {
@@ -331,7 +401,13 @@ impl Session {
             patch.keys().any(|k| {
                 !matches!(
                     k.as_str(),
-                    "mode" | "inputEnabled" | "inputDeviceId" | "outputs"
+                    "mode"
+                        | "inputEnabled"
+                        | "inputDeviceId"
+                        | "outputs"
+                        | "browserPort"
+                        | "overlayMode"
+                        | "hotkeys"
                 )
             }) || patch
                 .get("outputs")
@@ -371,9 +447,58 @@ impl Session {
         let command = Some(request.command.as_str());
         let reply = |this: &Self, result, issues: &[Issue]| this.reply(id, command, result, issues);
         let reject = |this: &Self, code, field| this.reject(id, command, code, field);
+        if request
+            .patch
+            .as_ref()
+            .and_then(|patch| patch.hotkeys.as_ref())
+            .is_some_and(|keys| {
+                keys.iter().flatten().any(|key| {
+                    if key.key == "None" {
+                        key.enabled
+                    } else {
+                        key.virtual_key().is_err()
+                    }
+                })
+            })
+        {
+            return (reject(self, "invalid_hotkey", "patch.hotkeys"), false);
+        }
         let next = match command {
             Some("status") => return (reply(self, "ok", &[]), false),
             Some("shutdown") => return (reply(self, "ok", &[]), true),
+            Some("open-settings") => {
+                self.editor.get_or_insert_with(|| SettingsEditor {
+                    page: SettingsPage::Basic,
+                    base_revision: self.revision,
+                    base: self.settings.clone(),
+                    draft: self.settings.clone(),
+                });
+                return (reply(self, "ok", &[]), false);
+            }
+            Some("close-settings") => {
+                self.editor = None;
+                return (reply(self, "ok", &[]), false);
+            }
+            Some("select-settings-page" | "edit-settings") => {
+                let Some(editor) = self.editor.as_mut() else {
+                    return (reject(self, "settings_closed", "settingsEditor"), false);
+                };
+                if command == Some("select-settings-page") {
+                    let Some(page) = request.page else {
+                        return (reject(self, "invalid_request", "page"), false);
+                    };
+                    editor.page = page;
+                } else {
+                    let Some(patch) = request.patch else {
+                        return (reject(self, "invalid_request", "patch"), false);
+                    };
+                    if !patch.belongs_to(editor.page) {
+                        return (reject(self, "wrong_settings_page", "patch"), false);
+                    }
+                    editor.draft = patch.candidate(&editor.draft, None);
+                }
+                return (reply(self, "ok", &[]), false);
+            }
             Some("validate-route") => {
                 let Some(mode) = request.mode else {
                     return (reject(self, "invalid_request", "mode"), false);
@@ -398,7 +523,7 @@ impl Session {
                 });
                 return (response, false);
             }
-            Some("apply" | "set-output") => {
+            Some("apply" | "set-output" | "apply-settings") => {
                 match request.expected_revision {
                     None => return (reject(self, "invalid_request", "expectedRevision"), false),
                     Some(n) if n != self.revision => {
@@ -406,7 +531,18 @@ impl Session {
                     }
                     _ => {}
                 }
-                if command == Some("apply") {
+                if command == Some("apply-settings") {
+                    let Some(editor) = self.editor.as_ref() else {
+                        return (reject(self, "settings_closed", "settingsEditor"), false);
+                    };
+                    if editor.base_revision != self.revision {
+                        return (
+                            reject(self, "stale_settings_draft", "settingsEditor"),
+                            false,
+                        );
+                    }
+                    editor.draft.clone()
+                } else if command == Some("apply") {
                     let Some(patch) = request.patch else {
                         return (reject(self, "invalid_request", "patch"), false);
                     };
@@ -467,6 +603,13 @@ impl Session {
             Ok(()) => {
                 if changed {
                     self.revision += 1;
+                }
+                if command == Some("apply-settings") {
+                    if let Some(editor) = self.editor.as_mut() {
+                        editor.base_revision = self.revision;
+                        editor.base = self.settings.clone();
+                        editor.draft = self.settings.clone();
+                    }
                 }
                 (reply(self, "applied", &issues), false)
             }
