@@ -43,6 +43,7 @@ pub struct Ui {
     tray: Tray,
     settings: Settings,
     phase: Phase,
+    wait_reason: Option<crate::state::WaitReason>,
     message: String,
     applying: bool,
     operation_error: String,
@@ -60,6 +61,7 @@ impl Ui {
             tray,
             settings: settings.clone(),
             phase: Phase::Stopped,
+            wait_reason: None,
             message: String::new(),
             applying: false,
             operation_error: String::new(),
@@ -67,7 +69,17 @@ impl Ui {
         ui.redraw();
         Ok(ui)
     }
+    #[cfg(test)]
     pub fn update(&mut self, settings: &Settings, phase: Phase, message: &str) {
+        self.update_status(
+            settings,
+            &crate::state::Status::new(settings.mode, phase, message),
+        );
+    }
+    pub fn update_status(&mut self, settings: &Settings, status: &crate::state::Status) {
+        let phase = status.phase;
+        let message = &status.message;
+        self.wait_reason = status.wait_reason;
         self.settings = settings.clone();
         if let Some(editor) = &mut self.editor {
             editor.sync_runtime(settings);
@@ -110,7 +122,7 @@ impl Ui {
         }
     }
     fn redraw(&mut self) {
-        let state = DisplayState::new(
+        let mut state = DisplayState::new(
             &self.settings,
             self.phase,
             &self.message,
@@ -121,6 +133,7 @@ impl Ui {
             },
             self.editor.is_some(),
         );
+        state.wait_reason = self.wait_reason;
         if self.overlay.update(&state) {
             self.tray.update_tip(&state.tooltip());
         }
@@ -263,6 +276,9 @@ impl Ui {
                     }
                 }
             }
+        }
+        if let Some(editor) = &self.editor {
+            editor.preview_routes();
         }
         actions
     }
@@ -649,3 +665,7 @@ mod observer_tests {
         drop(reserved);
     }
 }
+
+#[cfg(debug_assertions)]
+#[path = "ui/manual_preview.rs"]
+pub mod manual_preview;

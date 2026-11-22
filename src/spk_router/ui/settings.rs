@@ -13,6 +13,7 @@ use crate::{
 use std::{
     cell::{Cell, RefCell},
     path::PathBuf,
+    time::{Duration, Instant},
 };
 use windows::{
     core::{PCWSTR, PWSTR},
@@ -22,6 +23,113 @@ use windows::{
         UI::{Controls::*, Input::KeyboardAndMouse::*, WindowsAndMessaging::*},
     },
 };
+const TOKEN_EDIT: i32 = 332;
+const TOKEN_SHOW: i32 = 356;
+const TOKEN_COPY: i32 = 357;
+
+fn set_token_mask(owner: HWND, masked: bool) {
+    unsafe {
+        if let Ok(edit) = GetDlgItem(Some(owner), TOKEN_EDIT) {
+            SendMessageW(
+                edit,
+                EM_SETPASSWORDCHAR,
+                Some(WPARAM(if masked { 0x25cf } else { 0 })),
+                None,
+            );
+            let _ = InvalidateRect(Some(edit), None, true);
+        }
+        if let Ok(button) = GetDlgItem(Some(owner), TOKEN_SHOW) {
+            set_text(button, if masked { "表示" } else { "隠す" });
+        }
+    }
+}
+
+fn copy_token(owner: HWND, write: impl FnOnce(HWND, &[u16]) -> bool) -> bool {
+    let Ok(edit) = (unsafe { GetDlgItem(Some(owner), TOKEN_EDIT) }) else {
+        return false;
+    };
+    write(owner, &wide(&text(edit).trim()))
+}
+
+fn token_copy_tooltip(owner: HWND, instance: windows::Win32::Foundation::HINSTANCE) {
+    unsafe {
+        let Ok(button) = GetDlgItem(Some(owner), TOKEN_COPY) else {
+            return;
+        };
+        let Ok(tip) = CreateWindowExW(
+            WS_EX_TOPMOST,
+            TOOLTIPS_CLASSW,
+            PCWSTR::null(),
+            WS_POPUP | WINDOW_STYLE(TTS_ALWAYSTIP),
+            CW_USEDEFAULT,
+            CW_USEDEFAULT,
+            CW_USEDEFAULT,
+            CW_USEDEFAULT,
+            Some(owner),
+            None,
+            Some(instance),
+            None,
+        ) else {
+            return;
+        };
+        let info = TTTOOLINFOW {
+            cbSize: std::mem::size_of::<TTTOOLINFOW>() as u32,
+            uFlags: TTF_IDISHWND | TTF_SUBCLASS,
+            hwnd: owner,
+            uId: button.0 as usize,
+            lpszText: PWSTR(
+                windows::core::w!(
+                    "編集中の値をコピー。未適用の値は適用するまで接続に使われません。"
+                )
+                .0
+                .cast_mut(),
+            ),
+            ..Default::default()
+        };
+        SendMessageW(
+            tip,
+            TTM_ADDTOOLW,
+            None,
+            Some(LPARAM(&info as *const _ as isize)),
+        );
+    }
+}
+
+fn clipboard_write(owner: HWND, value: &[u16]) -> bool {
+    clipboard_write_impl(owner, value, false)
+}
+
+fn clipboard_write_impl(owner: HWND, value: &[u16], require_empty: bool) -> bool {
+    use windows::Win32::{
+        Foundation::{GlobalFree, HANDLE},
+        System::{DataExchange::*, Memory::*, Ole::CF_UNICODETEXT},
+    };
+    unsafe {
+        let Ok(memory) = GlobalAlloc(GMEM_MOVEABLE, std::mem::size_of_val(value)) else {
+            return false;
+        };
+        let data = GlobalLock(memory).cast::<u16>();
+        if data.is_null() {
+            let _ = GlobalFree(Some(memory));
+            return false;
+        }
+        std::ptr::copy_nonoverlapping(value.as_ptr(), data, value.len());
+        let _ = GlobalUnlock(memory);
+        if OpenClipboard(Some(owner)).is_err() {
+            let _ = GlobalFree(Some(memory));
+            return false;
+        }
+        let ok = (!require_empty || CountClipboardFormats() == 0)
+            && EmptyClipboard().is_ok()
+            && SetClipboardData(u32::from(CF_UNICODETEXT.0), Some(HANDLE(memory.0))).is_ok();
+        let _ = CloseClipboard();
+        if !ok {
+            let _ = GlobalFree(Some(memory));
+        }
+        ok
+    }
+}
+
 const SETTINGS_CLASS: &str = "VoiceMixerSpkSettingsV1";
 const SETTINGS_WIDTH: i32 = 840;
 const SETTINGS_HEIGHT: i32 = 580;
@@ -69,7 +177,9 @@ unsafe extern "system" fn settings_proc(hwnd: HWND, msg: u32, w: WPARAM, l: LPAR
                 return LRESULT(0);
             }
         }
+        WM_ACTIVATE if w.0 & 0xffff == WA_INACTIVE as usize => set_token_mask(hwnd, true),
         WM_CLOSE => {
+            set_token_mask(hwnd, true);
             queue(Command::Cancel);
             return LRESULT(0);
         }
@@ -77,6 +187,28 @@ unsafe extern "system" fn settings_proc(hwnd: HWND, msg: u32, w: WPARAM, l: LPAR
             let id = w.0 & 0xffff;
             let notification = w.0 >> 16;
             if notification == 0 {
+                if id == TOKEN_SHOW as usize {
+                    if let Ok(edit) = unsafe { GetDlgItem(Some(hwnd), TOKEN_EDIT) } {
+                        let visible =
+                            unsafe { SendMessageW(edit, EM_GETPASSWORDCHAR, None, None).0 } == 0;
+                        set_token_mask(hwnd, visible);
+                    }
+                    return LRESULT(0);
+                }
+                if id == TOKEN_COPY as usize {
+                    let ok = copy_token(hwnd, clipboard_write);
+                    if let Ok(message) = unsafe { GetDlgItem(Some(hwnd), 334) } {
+                        set_text(
+                            message,
+                            if ok {
+                                "コピーしました"
+                            } else {
+                                "コピーできませんでした"
+                            },
+                        );
+                    }
+                    return LRESULT(0);
+                }
                 if (345..=347).contains(&id) {
                     queue(Command::InputChanged);
                     return LRESULT(0);
@@ -88,8 +220,14 @@ unsafe extern "system" fn settings_proc(hwnd: HWND, msg: u32, w: WPARAM, l: LPAR
                     return LRESULT(0);
                 }
                 let command = match id {
-                    1 => Some(Command::Save),
-                    2 => Some(Command::Cancel),
+                    1 => {
+                        set_token_mask(hwnd, true);
+                        Some(Command::Save)
+                    }
+                    2 => {
+                        set_token_mask(hwnd, true);
+                        Some(Command::Cancel)
+                    }
                     BROWSER_HELP => Some(Command::BrowserInstallHelp),
                     BROWSER_SETUP_HELP => Some(Command::BrowserSetupHelp),
                     REPOSITORY_LINK => Some(Command::OpenRepository),
@@ -232,6 +370,10 @@ pub(super) struct SettingsWindow {
     app_detail: HWND,
     app_values: Vec<(PathBuf, String)>,
     outputs: [HWND; 2],
+    route_labels: [HWND; 2],
+    route_preview: RefCell<Option<(String, Instant)>>,
+    route_note: RefCell<String>,
+    operation_message: RefCell<String>,
     inputs: [HWND; 3],
     input_controls: RefCell<[Vec<HWND>; 3]>,
     building_input: Cell<usize>,
@@ -293,6 +435,10 @@ impl SettingsWindow {
                 app_detail: HWND::default(),
                 app_values: Vec::new(),
                 outputs: [HWND::default(); 2],
+                route_labels: [HWND::default(); 2],
+                route_preview: RefCell::new(None),
+                route_note: RefCell::new(String::new()),
+                operation_message: RefCell::new(warning.into()),
                 inputs: [HWND::default(); 3],
                 input_controls: RefCell::new(std::array::from_fn(|_| Vec::new())),
                 building_input: Cell::new(3),
@@ -472,11 +618,49 @@ impl SettingsWindow {
             s.label("ストリームキー", 202, 327, 120)?;
             s.stream = s.edit(&settings.browser_stream_key, 331, 330, 324, 482)?;
             s.label("認証トークン", 20, 365, 112)?;
-            s.token = s.edit(&settings.browser_token, 332, 140, 362, 672)?;
+            s.token = s.control(
+                "EDIT",
+                &settings.browser_token,
+                (ES_PASSWORD | ES_AUTOHSCROLL) as u32,
+                TOKEN_EDIT as usize,
+                140,
+                362,
+                490,
+                25,
+            )?;
+            s.control(
+                "BUTTON",
+                "表示",
+                BS_PUSHBUTTON as u32,
+                TOKEN_SHOW as usize,
+                640,
+                362,
+                78,
+                25,
+            )?;
+            s.control(
+                "BUTTON",
+                "コピー",
+                BS_PUSHBUTTON as u32,
+                TOKEN_COPY as usize,
+                728,
+                362,
+                84,
+                25,
+            )?;
             s.building_input.set(3);
             for i in 0..2 {
                 let y = 404 + i as i32 * 40;
-                s.label(&format!("出力{}", i + 1), 20, y + 2, 52)?;
+                s.route_labels[i] = s.control(
+                    "STATIC",
+                    &format!("出力{}", i + 1),
+                    0,
+                    360 + i,
+                    20,
+                    y + 2,
+                    58,
+                    22,
+                )?;
                 s.outputs[i] = s.control(
                     "BUTTON",
                     "有効",
@@ -535,6 +719,7 @@ impl SettingsWindow {
                 136,
                 32,
             )?;
+            token_copy_tooltip(s.hwnd, s._class.instance());
             s.refresh()?;
             s.input_selection_changed();
             s.set_page(0);
@@ -798,7 +983,21 @@ impl SettingsWindow {
         self.control("EDIT", value, ES_AUTOHSCROLL as u32, id, x, y, width, 28)
     }
     pub(super) fn message(&self, value: &str) {
-        set_text(self.message, value);
+        *self.operation_message.borrow_mut() = value.into();
+        self.refresh_message();
+    }
+    fn refresh_message(&self) {
+        let operation = self.operation_message.borrow();
+        let route = self.route_note.borrow();
+        let basic = unsafe { SendMessageW(self.tab, TCM_GETCURSEL, None, None).0 } == 0;
+        let value = if !basic || route.is_empty() {
+            operation.clone()
+        } else if operation.is_empty() {
+            route.clone()
+        } else {
+            format!("{route}\n{operation}")
+        };
+        set_text(self.message, &value);
     }
     pub(super) fn app_path(&self) {
         let value = self
@@ -851,6 +1050,92 @@ impl SettingsWindow {
         combo_items(self.app, self.app_values.iter().map(|v| v.1.clone()), index);
         self.app_path();
         Ok(())
+    }
+    pub(super) fn preview_routes(&self) {
+        self.preview_routes_with(crate::engine::routing::endpoint_id);
+    }
+    fn preview_routes_with(&self, resolve: impl Fn(&str) -> Result<String, String>) {
+        use crate::engine::routing::same_endpoint;
+        if self.applying.get()
+            || unsafe { SendMessageW(self.tab, TCM_GETCURSEL, None, None).0 } != 0
+        {
+            return;
+        }
+        let enabled = self.outputs.map(checked);
+        let ids = std::array::from_fn::<_, 3, _>(|i| {
+            self.device_values[i]
+                .get(selected(self.devices[i]))
+                .map_or("", |v| v.0.as_str())
+        });
+        let input_on = checked(self.inputs[0]);
+        let key = format!("{ids:?}:{enabled:?}:{input_on}:{}", self.base.mode as usize);
+        let mut preview = self.route_preview.borrow_mut();
+        if preview
+            .as_ref()
+            .is_some_and(|(old, at)| old == &key && at.elapsed() < Duration::from_secs(2))
+        {
+            return;
+        }
+
+        *preview = Some((key, Instant::now()));
+        let resolved = ids.map(|id| {
+            if id.is_empty() {
+                None
+            } else {
+                resolve(id).ok()
+            }
+        });
+        let mut notes = Vec::new();
+        for i in 0..2 {
+            let collision =
+                input_on && same_endpoint(resolved[0].as_deref(), resolved[i + 1].as_deref());
+            let active = collision && enabled[i] && self.base.mode == Mode::Device;
+            set_text(
+                self.route_labels[i],
+                &format!(
+                    "出力{}{}",
+                    i + 1,
+                    if active {
+                        " !"
+                    } else if collision {
+                        " △"
+                    } else {
+                        ""
+                    }
+                ),
+            );
+            if active {
+                notes.push(format!(
+                    "出力{}：入力と同じデバイスです。別のデバイスを選択してください。",
+                    i + 1
+                ));
+            } else if collision {
+                notes.push(format!(
+                    "出力{}：再生デバイス入力と同時に使用できません。",
+                    i + 1
+                ));
+            } else if (enabled[i] && resolved[i + 1].is_none() && !ids[i + 1].is_empty())
+                || (i == 0 && input_on && resolved[0].is_none() && !ids[0].is_empty())
+            {
+                notes.push(format!("出力{}：デバイス未接続または経路未確認。", i + 1));
+            }
+        }
+        if enabled == [true, true] && same_endpoint(resolved[1].as_deref(), resolved[2].as_deref())
+        {
+            notes.push(
+                if ids[1] == ids[2] {
+                    "出力1と2に同じデバイスは指定できません。"
+                } else {
+                    "出力1と2は同じ実デバイスです。出力1を優先します。"
+                }
+                .into(),
+            );
+        }
+        let note = notes.join(" / ");
+        if *self.route_note.borrow() != note {
+            *self.route_note.borrow_mut() = note;
+            self.refresh_message();
+        }
     }
     pub(super) fn read(&self) -> Result<Settings, String> {
         let mut settings = self.base.clone();
@@ -979,9 +1264,11 @@ impl SettingsWindow {
         }
     }
     pub(super) fn set_page(&self, page: usize) {
+        set_token_mask(self.hwnd, true);
         unsafe {
             SendMessageW(self.tab, TCM_SETCURSEL, Some(WPARAM(page)), None);
         }
+        self.refresh_message();
         for (index, controls) in self.pages.borrow().iter().enumerate() {
             for hwnd in controls {
                 unsafe {
@@ -991,6 +1278,9 @@ impl SettingsWindow {
         }
     }
     pub(super) fn set_applying(&self, applying: bool) {
+        if applying {
+            set_token_mask(self.hwnd, true);
+        }
         self.applying.set(applying);
         unsafe {
             let mut child = GetWindow(self.hwnd, GW_CHILD);
@@ -1077,6 +1367,97 @@ mod tests {
         Graphics::Gdi::ClientToScreen,
         UI::WindowsAndMessaging::*,
     };
+
+    #[test]
+    #[ignore = "実Win32設定窓で経路表示とトークン欄を検証"]
+    fn route_preview_and_mask_use_real_controls() {
+        use super::*;
+        let mut saved = Settings::default();
+        saved.browser_token = "fixture-only-v1015".into();
+        saved.outputs[0].endpoint_id = "default://communications".into();
+        let mut window = SettingsWindow::new(&saved, HICON::default(), "").unwrap();
+        window.show();
+        let resolve = |_: &str| Ok("same-real-endpoint".into());
+        window.preview_routes_with(resolve);
+        assert!(text(window.route_labels[0]).ends_with('△'));
+        assert!(text(window.message).contains("同時に使用できません"));
+        window.base.mode = Mode::Device;
+        check(window.outputs[0], true);
+        window.preview_routes_with(resolve);
+        assert!(text(window.route_labels[0]).ends_with('!'));
+        assert!(text(window.message).contains("別のデバイス"));
+        check(window.inputs[0], false);
+        window.preview_routes_with(resolve);
+        assert_eq!(text(window.route_labels[0]), "出力1");
+        assert!(!text(window.message).contains("別のデバイス"));
+        let masked =
+            || unsafe { SendMessageW(window.token, EM_GETPASSWORDCHAR, None, None).0 != 0 };
+        let click = |id| unsafe {
+            let button = GetDlgItem(Some(window.hwnd), id).unwrap();
+            SendMessageW(button, BM_CLICK, None, None);
+        };
+        assert!(masked());
+        click(TOKEN_SHOW);
+        assert!(!masked());
+        click(TOKEN_SHOW);
+        assert!(masked());
+        click(TOKEN_SHOW);
+        window.set_page(1);
+        assert!(masked());
+        window.set_page(0);
+        click(TOKEN_SHOW);
+        unsafe {
+            SendMessageW(
+                window.hwnd,
+                WM_ACTIVATE,
+                Some(WPARAM(WA_INACTIVE as usize)),
+                None,
+            );
+        }
+        assert!(masked());
+        assert!(copy_token(window.hwnd, |_, value| {
+            assert!(
+                value == wide("fixture-only-v1015"),
+                "コピーするテスト用トークンが一致しません"
+            );
+            true
+        }));
+        assert!(masked());
+        // 実クリップボードが空のときだけ書き込み、所有する試験値だけを片付ける。
+        unsafe {
+            use windows::Win32::{
+                Foundation::HGLOBAL,
+                System::{DataExchange::*, Memory::*, Ole::CF_UNICODETEXT},
+            };
+            if copy_token(window.hwnd, |owner, value| {
+                clipboard_write_impl(owner, value, true)
+            }) {
+                OpenClipboard(Some(window.hwnd)).unwrap();
+                let owned = GetClipboardOwner().is_ok_and(|owner| owner == window.hwnd);
+                let mut matches = false;
+                if owned {
+                    let data = GetClipboardData(u32::from(CF_UNICODETEXT.0)).unwrap();
+                    let memory = HGLOBAL(data.0);
+                    let ptr = GlobalLock(memory).cast::<u16>();
+                    let expected = wide("fixture-only-v1015");
+                    matches = !ptr.is_null()
+                        && GlobalSize(memory) >= std::mem::size_of_val(expected.as_slice())
+                        && std::slice::from_raw_parts(ptr, expected.len()) == expected.as_slice();
+                    let _ = GlobalUnlock(memory);
+                    let _ = EmptyClipboard();
+                }
+                let _ = CloseClipboard();
+                assert!(owned && matches, "試験用のクリップボード内容が一致しません");
+                println!("Win32のクリップボード書き込み・読み戻し成功");
+            } else {
+                println!("既存クリップボードの保護を優先し、コピー経路は注入した受け手で検証");
+            }
+        }
+        assert!(
+            text(window.token) == saved.browser_token,
+            "マスク・コピー後の値が一致しません"
+        );
+    }
 
     fn select_key(window: &SettingsWindow, row: usize, key: &str) {
         let index = key_choices().iter().position(|value| value == key).unwrap();

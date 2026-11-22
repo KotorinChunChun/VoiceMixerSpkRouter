@@ -9,7 +9,10 @@ fn input_status(state: &DisplayState, command: Command) -> Option<&'static str> 
         _ => return None,
     };
     if state.mode != mode {
-        return Some("無効");
+        return Some("未選択");
+    }
+    if let Some(reason) = state.wait_reason {
+        return Some(reason.short());
     }
     match state.phase {
         Phase::Starting => Some("準備中"),
@@ -133,11 +136,16 @@ pub(super) unsafe fn draw_overlay(dc: HDC, bounds: RECT, state: &DisplayState) {
                 );
             } else if matches!(command, Command::Output1 | Command::Output2) {
                 let index = command as usize - Command::Output1 as usize;
-                let status = if !state.outputs[index] || state.mode == Mode::Stopped {
-                    Some("無効")
+                let status = if !state.outputs[index] {
+                    Some("出力OFF")
+                } else if state.mode == Mode::Stopped {
+                    Some("停止中")
                 } else if state.phase == Phase::Error {
                     Some("エラー")
-                } else if matches!(state.phase, Phase::Starting | Phase::Waiting) || !meters.fresh {
+                } else if matches!(state.phase, Phase::Starting | Phase::Waiting)
+                    || state.wait_reason.is_some()
+                    || !meters.fresh
+                {
                     Some("待機中")
                 } else if !meters.active[index + 1] {
                     Some("無効")
@@ -227,7 +235,7 @@ mod tests {
         ] {
             let state = DisplayState::new(&settings, phase, "", "", false);
             assert_eq!(input_status(&state, Command::Browser), expected);
-            assert_eq!(input_status(&state, Command::Device), Some("無効"));
+            assert_eq!(input_status(&state, Command::Device), Some("未選択"));
         }
     }
 }

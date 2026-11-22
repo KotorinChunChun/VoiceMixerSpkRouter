@@ -66,6 +66,7 @@ pub(super) struct DisplayState {
     mode: Mode,
     inputs: [bool; 3],
     phase: Phase,
+    pub(super) wait_reason: Option<crate::state::WaitReason>,
     outputs: [bool; 2],
     keys: [String; HOTKEY_COUNT],
     labels: [String; 2],
@@ -390,6 +391,7 @@ impl DisplayState {
             mode: settings.mode,
             inputs: settings.input_enabled,
             phase,
+            wait_reason: None,
             outputs: settings.outputs.each_ref().map(|o| o.enabled),
             keys: settings.hotkeys.each_ref().map(|k| k.key_label().into()),
             labels: settings.output_labels.clone(),
@@ -456,18 +458,18 @@ impl DisplayState {
     }
     pub(super) fn tooltip(&self) -> String {
         format!(
-            "{} / {} {} / {} {} / 表示 {}{}",
+            "{}{} / {} {} / {} {} / 表示 {}",
             self.title,
+            if self.failed || self.wait_reason.is_some() || self.phase == Phase::Waiting {
+                format!(" / {}", self.message)
+            } else {
+                String::new()
+            },
             self.labels[0],
             if self.outputs[0] { "ON" } else { "OFF" },
             self.labels[1],
             if self.outputs[1] { "ON" } else { "OFF" },
-            self.overlay.label(),
-            if self.failed {
-                format!(" / {}", self.message)
-            } else {
-                String::new()
-            }
+            self.overlay.label()
         )
     }
 }

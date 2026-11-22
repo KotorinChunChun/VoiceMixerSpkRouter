@@ -1,7 +1,7 @@
 #[path = "engine/browser.rs"]
 mod browser;
 #[path = "engine/routing.rs"]
-mod routing;
+pub(crate) mod routing;
 #[path = "engine/session.rs"]
 mod session;
 use crate::{
@@ -29,6 +29,42 @@ pub enum Command {
     },
     Exit,
 }
+pub(crate) struct TransactionFailure {
+    #[cfg_attr(not(debug_assertions), allow(dead_code))]
+    pub stage: &'static str,
+    pub detail: String,
+    pub recovery: Option<String>,
+}
+
+pub(crate) fn commit_audio<T, S>(
+    backend: &mut T,
+    current: &mut Settings,
+    next: Settings,
+    apply: impl FnOnce(&mut T, &Settings) -> Result<S, String>,
+    save: impl FnOnce(&Settings) -> Result<(), String>,
+    restore: impl FnOnce(&mut T, &Settings) -> Result<(), String>,
+) -> Result<S, TransactionFailure> {
+    let result = apply(backend, &next)
+        .map_err(|error| ("audio_apply_failed", error))
+        .and_then(|state| {
+            if next != *current {
+                save(&next).map_err(|error| ("save_failed", error))?;
+            }
+            Ok(state)
+        });
+    match result {
+        Ok(state) => {
+            *current = next;
+            Ok(state)
+        }
+        Err((stage, detail)) => Err(TransactionFailure {
+            stage,
+            detail,
+            recovery: restore(backend, current).err(),
+        }),
+    }
+}
+
 /// 音声反映と保存の両方が成功したときだけ設定を確定する。
 fn apply_transaction(
     resident: &mut Option<Resident>,
@@ -56,31 +92,21 @@ fn apply_transaction(
         *resident = Some(Resident::new(current, directory)?);
     }
     let active = resident.as_mut().unwrap();
-    let audio_changed = created || current.requires_audio_update(&next);
-    let applied = (|| {
-        if audio_changed {
-            active.configure(&next)?;
-        }
-        let status = active.tick(&next)?;
-        if next != *current {
-            next.save(path)?;
-        }
-        Ok(status)
-    })();
-    match applied {
-        Ok(status) => {
-            *current = next;
-            Ok(status)
-        }
-        Err(error) => {
-            if audio_changed {
-                if let Err(restore) = active.configure(current) {
-                    return Err(format!("{error} / 旧音声設定の復旧にも失敗: {restore}"));
-                }
-            }
-            Err(error)
-        }
-    }
+    commit_audio(
+        active,
+        current,
+        next,
+        |active, next| {
+            active.configure(next)?;
+            active.tick(next)
+        },
+        |next| next.save(path),
+        |active, previous| active.configure(previous),
+    )
+    .map_err(|failure| match failure.recovery {
+        Some(restore) => format!("{} / 旧音声設定の復旧にも失敗: {restore}", failure.detail),
+        None => failure.detail,
+    })
 }
 pub fn spawn(
     settings: Settings,

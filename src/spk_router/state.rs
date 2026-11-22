@@ -85,11 +85,40 @@ impl fmt::Display for Phase {
     }
 }
 
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum WaitReason {
+    AppNotRunning,
+    Preparing,
+    TabDisconnected,
+    Audio,
+}
+impl WaitReason {
+    pub fn short(self) -> &'static str {
+        match self {
+            Self::AppNotRunning => "アプリ起動待ち",
+            Self::Preparing => "準備中",
+            Self::TabDisconnected => "タブ接続待ち",
+            Self::Audio => "音声待ち",
+        }
+    }
+    pub fn detail(self) -> &'static str {
+        match self {
+            Self::AppNotRunning => "アプリ起動待ち：対象アプリを起動してください",
+            Self::Preparing => "音声取得の準備中",
+            Self::TabDisconnected => "タブ接続待ち：拡張でキャプチャを開始し接続設定を確認",
+            Self::Audio => "音声待ち：対象タブのキャプチャと再生を確認",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct Status {
     pub mode: Mode,
     pub phase: Phase,
     pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wait_reason: Option<WaitReason>,
 }
 
 impl Status {
@@ -98,6 +127,7 @@ impl Status {
             mode,
             phase,
             message: message.into(),
+            wait_reason: None,
         }
     }
 }
