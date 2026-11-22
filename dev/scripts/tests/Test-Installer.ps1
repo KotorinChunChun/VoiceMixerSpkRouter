@@ -29,6 +29,7 @@ using System;using System.Text;using System.Runtime.InteropServices;
 public static class InstallerWindow{
  [DllImport("user32.dll",CharSet=CharSet.Unicode)]public static extern IntPtr FindWindow(string c,string t);
  [DllImport("user32.dll")]public static extern uint GetWindowThreadProcessId(IntPtr h,out uint pid);
+ [DllImport("user32.dll")]public static extern bool IsWindowVisible(IntPtr h);
  [DllImport("user32.dll")]public static extern IntPtr GetDlgItem(IntPtr h,int id);
  [DllImport("user32.dll",EntryPoint="SendMessageW")]public static extern IntPtr Send(IntPtr h,uint m,IntPtr w,IntPtr l);
  [DllImport("user32.dll",EntryPoint="SendMessageW",CharSet=CharSet.Unicode)]public static extern IntPtr Text(IntPtr h,uint m,IntPtr w,string value);
@@ -75,6 +76,21 @@ function OwnWindow {
  if($owner -ne $script:process.Id){throw '設定画面の所有PIDが異なります'}
  return $window
 }
+function ShowSettings {
+ # 旧版の管理showはウィンドウを作る間に応答期限を超える場合がある。
+ # ここでは通常の設定表示CLIを使い、管理showの回帰はTest-Managementで確認する。
+ $request=Start-Process -FilePath $exe -ArgumentList '--settings' -WorkingDirectory $install -WindowStyle Hidden -PassThru
+ try {
+  if(-not $request.WaitForExit(15000) -or $request.ExitCode -ne 0){throw '設定表示CLIが完了しません'}
+ }finally{$request.Dispose()}
+ $deadline=[DateTime]::UtcNow.AddSeconds(15)
+ do {
+  $window=[InstallerWindow]::FindWindow('VoiceMixerSpkSettingsV1',[NullString]::Value)
+  if($window -ne [IntPtr]::Zero -and [InstallerWindow]::IsWindowVisible($window)){return (OwnWindow)}
+  Start-Sleep -Milliseconds 80
+ }while([DateTime]::UtcNow -lt $deadline)
+ throw '設定画面が表示されません'
+}
 try {
  $first=if($PreviousInstaller){(Resolve-Path -LiteralPath $PreviousInstaller).Path}else{$setup}
  Check ((Install $first) -eq 0) '初回のサイレント導入'
@@ -91,8 +107,9 @@ try {
  $settings|ConvertTo-Json -Depth 20|Set-Content -LiteralPath $config -Encoding utf8NoBOM
  $hash=(Get-FileHash -LiteralPath $config).Hash
  StartApp
- Check ((Send 'show').result -eq 'completed') '設定画面の表示'
- $window=OwnWindow;$field=[InstallerWindow]::GetDlgItem($window,340)
+ $window=ShowSettings
+ Check ($window -ne [IntPtr]::Zero) 'CLIで既存プロセスの設定画面を表示'
+ $field=[InstallerWindow]::GetDlgItem($window,340)
  [void][InstallerWindow]::Text($field,12,[IntPtr]::Zero,'未保存の編集')
  Check ((Install $setup) -ne 0 -and -not $process.HasExited) '編集中はsetup更新を拒否'
  Check ((Uninstall) -ne 0 -and -not $process.HasExited) '編集中はアンインストールを拒否'
