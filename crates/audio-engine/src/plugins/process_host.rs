@@ -679,7 +679,8 @@ mod tests {
     #[test]
     fn input_overflow_still_drains_output_and_returns_silent_error() {
         let package = crate::plugins::package::load_package_manifest(
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../plugins/rvc-cuda/plugin.json"),
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../../plugins/voice-extraction/plugin.json"),
         )
         .unwrap();
         for path in ["in_place", "ports_v1", "ports_v2"] {

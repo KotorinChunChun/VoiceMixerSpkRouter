@@ -7,7 +7,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub const APP_VERSION: &str = "1.0.16";
+pub const APP_VERSION: &str = "1.0.17";
 pub const APP_NAME: &str = "VoiceMixerSpkRouter";
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]

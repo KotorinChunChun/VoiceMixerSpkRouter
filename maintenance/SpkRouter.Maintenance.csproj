@@ -2,7 +2,7 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType><TargetFramework>net10.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><PlatformTarget>x64</PlatformTarget>
-    <AssemblyName>SpkRouter.Maintenance</AssemblyName><Version>1.0.16</Version><RuntimeFrameworkVersion>10.0.14</RuntimeFrameworkVersion>
+    <AssemblyName>SpkRouter.Maintenance</AssemblyName><Version>1.0.17</Version><RuntimeFrameworkVersion>10.0.15</RuntimeFrameworkVersion>
   </PropertyGroup>
   <ItemGroup><Compile Remove="tests/**/*.cs" /></ItemGroup>
 </Project>

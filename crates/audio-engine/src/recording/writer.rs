@@ -274,3 +274,46 @@ impl Drop for RecorderSink {
         let _ = self.stop();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::recording::codecs::{decode_audio_file, encode_audio_file};
+
+    #[test]
+    fn flac_preserves_pcm_in_file_and_streaming_encoders() {
+        let directory = tempfile::tempdir().unwrap();
+        let samples: Vec<_> = (0..8195)
+            .flat_map(|frame| {
+                let position = frame as f32;
+                [
+                    (position * 0.03125).sin() * 0.5,
+                    (position * 0.046875).cos() * 0.25,
+                ]
+            })
+            .collect();
+        let file = directory.path().join("file.flac");
+        encode_audio_file(&file, RecordingFormat::Flac, &samples).unwrap();
+
+        let stream = directory.path().join("stream.flac");
+        let recorder = RecorderSink::start(&stream, RecordingFormat::Flac, 1).unwrap();
+        for chunk in samples.chunks(1024) {
+            recorder
+                .write(&AudioBlock::from_interleaved_stereo(chunk.to_vec()))
+                .unwrap();
+        }
+        recorder.stop().unwrap();
+
+        for path in [file, stream] {
+            let decoded = decode_audio_file(&path).unwrap();
+            assert_eq!(decoded.samples.len(), samples.len());
+            for (&actual, &expected) in decoded.samples.iter().zip(&samples) {
+                assert!(
+                    (actual - expected).abs() <= 1.0 / 4_194_304.0,
+                    "{}: {actual} != {expected}",
+                    path.display()
+                );
+            }
+        }
+    }
+}

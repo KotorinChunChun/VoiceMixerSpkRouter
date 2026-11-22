@@ -40,6 +40,7 @@ try {
     $package = Join-Path $stage 'VoiceMixerSpkRouter'
     [void][IO.Directory]::CreateDirectory($package)
     Copy-Item -LiteralPath $executable -Destination (Join-Path $package 'voicemixer-spk.exe')
+    Copy-Item -LiteralPath (Join-Path $projectRoot 'vendor/flacenc-0.5.1/LICENSE') -Destination (Join-Path $package 'LICENSE-flacenc.txt')
     Copy-Item -LiteralPath (Join-Path $projectRoot 'docs/portable-start.html') -Destination (Join-Path $package 'はじめに.html')
     Copy-Item -LiteralPath (Join-Path $projectRoot 'docs/spk-browser-capture.html') -Destination (Join-Path $package 'browser-capture.html')
     $extensionTarget = Join-Path $package 'browser-extension'

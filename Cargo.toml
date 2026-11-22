@@ -1,8 +1,8 @@
 [package]
 name = "voicemixer-spk-router"
-version = "1.0.16"
+version = "1.0.17"
 edition = "2021"
-rust-version = "1.85"
+rust-version = "1.88"
 publish = false
 
 [[bin]]
@@ -12,7 +12,11 @@ path = "src/main.rs"
 [workspace]
 members = ["crates/audio-engine"]
 default-members = ["."]
+exclude = ["vendor/flacenc-0.5.1"]
 resolver = "2"
+
+[patch.crates-io]
+flacenc = { path = "vendor/flacenc-0.5.1" }
 
 [features]
 default = ["edge-websocket"]

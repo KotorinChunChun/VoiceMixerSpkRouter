@@ -2,7 +2,7 @@
 name = "voicemixer-audio-engine"
 version = "0.4.8"
 edition = "2021"
-rust-version = "1.85"
+rust-version = "1.88"
 publish = false
 
 [lib]
